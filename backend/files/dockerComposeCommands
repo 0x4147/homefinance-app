@@ -1,0 +1,63 @@
+
+Setup & Build
+
+| Command                           | Description                                                                   |
+| --------------------------------- | ----------------------------------------------------------------------------- |
+| `docker-compose up`               | Builds, (re)creates, starts containers in the background (if not using `-d`). |
+| `docker-compose up -d`            | Same as above, but runs in detached mode (in the background).                 |
+| `docker-compose build`            | Builds the images defined in your `docker-compose.yml`.                       |
+| `docker-compose build --no-cache` | Rebuilds images without using cache.                                          |
+
+
+ Stop & Remove
+
+| Command               | Description                                                      |
+| --------------------- | ---------------------------------------------------------------- |
+| `docker-compose down` | Stops and removes all containers, networks, and volumes defined. |
+| `docker-compose stop` | Stops the running containers without removing them.              |
+| `docker-compose rm`   | Removes stopped containers.                                      |
+
+
+Info & Debugging
+
+| Command                  | Description                                                     |
+| ------------------------ | --------------------------------------------------------------- |
+| `docker-compose ps`      | Lists the status of all containers defined in the Compose file. |
+| `docker-compose logs`    | Shows logs for all services.                                    |
+| `docker-compose logs -f` | Follows logs in real time (like `tail -f`).                     |
+| `docker-compose top`     | Displays running processes in the containers.                   |
+
+
+Exec & Run Commands Inside Containers
+
+| Command                                   | Description                                                                            |
+| ----------------------------------------- | -------------------------------------------------------------------------------------- |
+| `docker-compose exec <service> <command>` | Runs a command in a running container (e.g., `docker-compose exec homefinance bash`).  |
+| `docker-compose run <service> <command>`  | Runs a one-off command in a new container (e.g., `docker-compose run homefinance sh`). |
+
+
+Volumes & Cleanup
+
+| Command                     | Description                                                   |
+| --------------------------- | ------------------------------------------------------------- |
+| `docker-compose down -v`    | Removes containers and **named volumes** defined in the file. |
+| `docker volume ls`          | List Docker volumes.                                          |
+| `docker volume rm <volume>` | Remove a specific volume.                                     |
+
+
+
+Restart
+
+| Command                            | Description                  |
+| ---------------------------------- | ---------------------------- |
+| `docker-compose restart`           | Restarts all the containers. |
+| `docker-compose restart <service>` | Restart a specific service.  |
+
+
+Using Specific Compose Files or Projects
+
+| Command                                   | Description                                              |
+| ----------------------------------------- | -------------------------------------------------------- |
+| `docker-compose -f custom-compose.yml up` | Use a specific Compose file.                             |
+| `docker-compose -p myproject up`          | Set a custom project name instead of the directory name. |
+

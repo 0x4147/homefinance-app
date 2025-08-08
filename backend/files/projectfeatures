@@ -1,0 +1,526 @@
+CORE PURPOSE OF APPLCIATION:
+	track income and expenses
+	track investments
+	add recepiepts and attach them to transactions
+	Business (rental property) income and expenses for taxes
+	Budgeting
+	Different user access
+
+
+DOCKER FOR BEGINNERS: DEVoPS FOR JAVA AND SPRNIG BOOT
+
+Starter:
+	enter income
+	enter expenses
+	display in ui
+
+Dash board to visualize data
+user docker k8s
+Login users
+Integrate bank details
+Enter manual  Income/Expense Entries
+save and attch recepits to expenses
+Rental Invoices: Generate and send invoices to tenants.
+Tax Preparation Reports: Export data to simplify tax filing (breakdowns of expenses, income, and receipts).
+Data Backup and Security
+
+UI:
+	Dashboard
+		See total income, expenses, saving, investments visually (Graphs and Charts)
+			for entities like family, personal, business and all
+				broken down by
+					category
+					date (ytd, today, monthly)
+				category
+				by property
+		See goal progress
+			how long till achieving it
+
+
+1. Dashboard
+Overview of Finances:
+
+Show a summarized view of
+	income
+	expenses
+	Savings
+	Investments
+
+	for both the rental business and family.
+Graphs and Charts: Visualize trends in income and expenses over time, broken down by month, category, or property.
+
+
+2. Expense and Income Tracking
+Add Income/Expense Entries: Form to add and categorize different types of income (rent, salary, etc.) and expenses (maintenance, groceries, etc.).
+Categorization: Allow for custom categories such as “Rental Expenses,” “Family Expenses,” “Maintenance,” “Utilities,” etc.
+Recurring Entries: Automatically track recurring expenses (like rent payments, utility bills, mortgage) and income (monthly rent, salary).
+Search and Filter: Allow users to search transactions by category, date range, or amount.
+
+3. Receipt Management
+Upload Receipts: Let users upload receipts for expenses or income. Store images or PDFs of receipts.
+Receipt Tagging: Tag receipts with categories like "Rental Property 1" or "Groceries" to easily retrieve them later.
+Link Receipts to Transactions: Attach receipts directly to individual income or expense entries.
+
+4. Rental Property Management
+Property Profiles: Create profiles for each rental property to track specific income and expenses per property.
+Tenant Information: Store tenant details (names, lease dates, contact info, payment history).
+Lease Tracking: Keep track of lease start/end dates, rent amounts, and lease renewals.
+Rental Invoices: Generate and send invoices to tenants.
+
+5. Family Budgeting
+Budgeting Tools: Set monthly budgets for different categories (food, entertainment, education, etc.).
+Family Member Profiles: Track income and expenses separately for each family member.
+Shared Expenses: Tag expenses as shared (e.g., family vacations, groceries) or individual (e.g., personal purchases).
+
+6. Reports
+Monthly/Annual Reports: Generate reports summarizing income, expenses, and profit/loss for both the business and family.
+Tax Preparation Reports: Export data to simplify tax filing (breakdowns of expenses, income, and receipts).
+Property-Specific Reports: Generate detailed reports for individual rental properties.
+
+7. Notifications and Reminders
+Payment Reminders: Automatic reminders for rent collection or upcoming expenses.
+Expense Alerts: Get alerts if expenses exceed a set budget.
+Lease Renewal Alerts: Notify users when a lease is nearing its end.
+
+8. User Roles and Permissions
+Admin/User Roles: Set up different permissions (you as the admin, other family members, or an accountant with limited access).
+Multi-User Access: Allow family members to log in and manage their expenses.
+
+9. Mobile-Friendly Interface
+Mobile Version: Ensure the app works well on mobile devices for easy expense tracking and receipt uploading on the go.
+Offline Functionality: Let users add entries and upload receipts even when offline, syncing when the connection is restored.
+
+10. Data Backup and Security
+Cloud Backup: Automatically back up data to the cloud to avoid data loss.
+Encryption: Secure sensitive data like financial records and receipts.
+
+11. Integrations
+Bank Account Integration: Integrate with bank accounts to automatically import transactions.
+Tax Software Export: Export financial data to tax software like QuickBooks or TurboTax.
+These features will help you efficiently manage both your rental business and personal finances, making the web application a comprehensive financial management tool.
+
+
+-------------------------------------------------------------
+
+AI INTEGERATION:
+
+Use Cases for AI Integration
+1. Income and Expense Tracking
+Automatic Categorization: Use AI to analyze transaction descriptions and automatically categorize them (e.g., groceries, rent, entertainment).
+Duplicate Detection: Identify duplicate entries using natural language understanding and pattern recognition.
+
+2. Receipt Management
+OCR (Optical Character Recognition): Integrate with a service like Azure OCR or use AI APIs to extract details (date, amount, vendor, category) from receipt images.
+Smart Matching: Use AI to match receipts to transactions by comparing extracted receipt details with your transaction database.
+Language Translation: Translate receipts into the user's preferred language.
+
+3. Investment Tracking
+Sentiment Analysis: Use AI to analyze financial news and reports for sentiment on specific investments.
+Predictive Insights: Provide AI-driven insights into trends based on historical data and patterns.
+
+4. Business Income and Expense
+Tax Deduction Suggestions: Analyze business transactions and suggest tax-deductible expenses.
+Smart Reports: Use AI to generate detailed tax reports and flag inconsistencies or missing data.
+
+5. Budgeting
+Budget Suggestions: Use AI to analyze past spending and recommend realistic budgets for categories.
+Expense Forecasting: Predict future expenses based on historical trends.
+Anomaly Detection: Alert users about unusual spikes in spending or income.
+
+6. User Access and Personalization
+Personalized Insights: Provide tailored financial advice based on spending habits, financial goals, and user profiles.
+Multi-User Behavior Analysis: Recognize and differentiate spending patterns for different users in shared accounts.
+Fraud Detection: Monitor for unusual activity patterns, especially for multi-user environments.
+
+7. User Assistance
+AI Chatbot: Build a financial assistant chatbot to answer user questions, remind them about bills, or give tips on managing finances.
+Query-Based Reporting: Use natural language processing to allow users to ask questions like "How much did I spend on groceries last month?" or "What are my largest expenses this year?"
+
+8. General Analytics
+Trend Analysis: Offer insights like “Your spending on dining out has increased by 20% over the last 3 months.”
+Goal Tracking: Suggest strategies to save for specific goals based on user-defined timelines.
+
+
+Potential AI API Integrations
+OpenAI APIs:
+
+Natural Language Processing (NLP): For chatbots, query-based reporting, or generating recommendations.
+Text Classification: To categorize expenses and transactions automatically.
+Text Summarization: Summarize financial insights and reports.
+OCR APIs:
+
+Google Vision, AWS Textract, or Tesseract for extracting data from receipts.
+Financial Data APIs:
+
+Plaid or Yodlee for retrieving transaction data from user accounts and linking it with AI for categorization and analysis.
+Sentiment Analysis APIs:
+
+Google Natural Language or IBM Watson for analyzing investment sentiment.
+Image Processing APIs:
+
+Use AI for receipt enhancement, rotation, and clarity improvements.
+
+
+
+with date and tagging(categorizing) - have as transactions so can attach recepits
+
+	income, expense, investment
+
+-------------------------------------------------------------
+
+Create basic front end
+call apis - do action
+docker container
+kubernetes
+deploy
+	Learn about ci/cd
+Learn/add simple authentication?
+
+
+Then full fledge front end with bootstrap
+Integrated with Vue
+add more apis
+Add other backend integrations
+	bank info
+	authenitcation
+migrate to sql db
+
+
+------------------------------------------------------------
+
+Make image of application
+
+make it a continer
+
+make docker compose - yaml files
+
+upload to docker hub
+
+
+create kubernetes cluster
+
+make the deploy, services and other yaml files
+
+deploy it
+
+access it
+
+
+Break front end into it's own project
+
+then do the devops
+
+
+work on the actual project
+
+
+
+
+--------------------------------------------------------------
+OVERALL TODO:
+	Enter expense and income
+		rental and personal
+	Add recepits
+	Integrate bank detils
+	OCR
+		upload the two bills.
+		generate an email from a template with the calculated amount.
+		Send email.
+
+	Integrate GPT to get general analtics
+
+TO DO:
+
+	Have a form
+		Income
+		expense
+		date selection
+		Recepit attachment - image
+
+
+
+		Have different profiles
+		select a profile
+
+
+
+
+
+
+		Can you give me a front end webpage for my Personal Finance web application?
+		It should have a look similar to Quickbooks application.
+		Use bootstrap for styling.
+		Add what you think is important.
+		Some components I defenitely need are, a form to enter income and expenses with selection of date. Be able to attach recepits.
+
+
+
+
+
+what I've done so far
+
+end to end working - basic
+
+to do:
+
+	test apis
+
+
+Phase 1:
+
+	**DONE** Be able to add income and expenses with all details
+			Type
+			Date
+			Amount
+			name
+			Details
+			Categorizer
+			Recepit
+
+	**DONE** Make a relational DB
+
+	**DONE** Get app to talk with db for all functionaloty
+
+	**DONE** Be able to see a list of transactions from a date range
+
+	**DONE**	Be able to categorize transactions
+
+	**DONE** 3 Charts that display the following using Javascript, html and any supporting framework that makes things simpler. Make it look modern. use bootstrap.
+		Three tabs on at the top navigation named "Spending by category", "Top merchants" and "Spending my month"
+		User can click on each to get the chart and details
+		Spending by category, by month. Bar chart
+			Have a date range selection and a submission button
+			calls backend api that returns details of
+				all the categeories and the amounts spent for and all transaction details for each
+					get all transaction for given date range
+					Make java Response object
+						Map <Catagory, BigDecimal> totals;
+						Map <Catagory, List<Transaction>> details;
+					Iterate over all the transaction
+						each transaction need
+
+			so when user clicks on a certain category, unterneath displays all the transactions corresponding to that category
+		Top merchants - pie chart
+			Have a date range selection and a submission button
+			calls backend api that returns details of
+				all the merchants and the amounts spent and All transaction details each.
+			so when user clicks on a certain merchant, unterneath displays all the transactions corresponding to that merchant
+		Spending my month.
+			Be able to select a month/year range and a submission button
+			calls backend api that returns details of
+				totals for each month in the given range and all the transaction details for those months.
+			so when user clicks on a certain month, unterneath displays all the transactions corresponding to that month
+
+	**DONE** Payments made by each then who owes what
+			This section shows the total amount each Asanka and Divya has paid and checks if the balance is 0? If balance is not 0 then whoever paid less owes the other.
+			Be able to select a month in a year.
+			Based on the selected month/year, javascript should call my backend service to retrieve the data of Divya, Asanka's amounts paid for that month and the balance amount owed by who.
+			Then that information is fed into the ui. The UI should say.
+			Asanka has paid $xxx in month, year.
+			Divya has paid $xxx in month, year.
+			$Asanka/$Divya owe $xxx to $Asanka/$Divya
+			Then have one button below it. Name it "Flag as balanced"
+			This would call my backend service that updates the database with this information.
+
+	**DONE**	Add batch UI and integrations
+		container (<div class="container-md" ) using bootstrap that has the following components
+		section to  upload a csv file. A button to add transactions.
+		Then java script to retreive that file and pass it on to my backend endpoint /api/v1/transactionBatchUpload
+		this is how it's set up and parameter expected -
+			    @PostMapping
+				public ResponseEntity<String> uploadFile(@RequestParam("file") MultipartFile file)
+
+	**DONE** batch job backend
+
+	**DONE** Given a month range show all the transactions of payments made	whether it was balanced
+
+	**DONE**Add AMEX batch
+			Have he option to select either Amex or CIBC then submit
+			javascipt then calls the approporite backend or backend decides which bank it is from
+
+    Deploy to k8s
+
+    Helm
+
+    CI/CD
+
+    Finish up UI
+
+
+
+Phase 2:
+
+	Add new columns, logic and java side
+
+    Make use of payment table to keep track of payments
+        remove payment ID column from payment table
+        Add a 3rd table that has a one to many relationship with each trasaction covered by a payment
+
+    Create a ExpectedTransaction table
+        This table stores the list of "must-enter" or "should-enter" transactions.
+            CREATE TABLE expected_transaction (
+                id BIGSERIAL PRIMARY KEY,
+                name VARCHAR(255) NOT NULL,            -- e.g., "Asanka - Rent"
+                amount NUMERIC(10, 2),                 -- Optional, for comparison
+                account_type VARCHAR(50),              -- Optional (e.g., ASANKA, DIVYA)
+                transaction_type VARCHAR(50),          -- Optional (e.g., RENT)
+                due_day INT,                           -- Optional, e.g., due by 1st of month
+                is_active BOOLEAN DEFAULT TRUE         -- To disable future entries
+
+
+            You’d check your transaction table (e.g., in Java or SQL) and try to match each expected transaction for the selected month.
+
+            You can add a helper view or code logic like this:
+            for (ExpectedTransaction et : expectedTransactions) {
+                boolean isMatched = transactions.stream().anyMatch(txn ->
+                    txn.getTransactionType() == et.getTransactionType() &&
+                    txn.getAccountType() == et.getAccountType() &&
+                    sameMonth(txn.getDate(), selectedMonth)
+                );
+                if (!isMatched) {
+                    System.out.println("Missing: " + et.getName());
+                }
+            }
+
+
+	Add more details into the balancing UI
+        What months have been balanced
+        How much each individual
+            expenses from personal paid
+            rent received
+            rental bill received
+            Mortgage paid
+            bills paid
+
+
+	Check for duplicates
+
+	backup data
+
+	upload a receipt
+		it then attaches itself to a transaction
+		detects all the grocery items
+		then logs them - later check what I boaugt
+
+	Report in UI if something wrong with batch process
+
+	UI improvements
+		Have the Dashboard as the home page
+			Have cards
+			Have month to date pie chart of Spending by category, spending by merchant and bar line chart of spending in the last two months
+			All recent transactions.
+			Summary wording: What was the biggest purchase in the last three months
+
+	Deploy and host using k8s and docker
+
+
+
+	AI integrations
+		and OpenAI API matching to categorize transactions
+		Ask questions and have asnwers
+			Be able to see year to date amount for gas, electricity, internet, mortgage insurance, home insurance, interest on mortgage, furnance insurance, furnance rental, how much Ekta has paid.
+		CAtegorizing
+		tagging : Beyond simple "Category", AI can assign extra tags like:"Online Purchase""Recurring Bill""Travel Expense""Large Purchase"
+		Summarizing Expenses: AI generates natural language summaries: "You spent 32% more on Dining this month compared to last month."
+		Expense explanations: This purchase at Costco is most likely groceries or household supplies
+		Expense Prediction: Based on past behavior, AI predicts:Upcoming billsLikely monthly spend"You are on track to spend $300 more this month."
+		Personalized Advice: Based on your spending patterns, you should set a grocery budget of $600/month.
+		Natural Language Search: User can type:"Show me all groceries in April""How much did I spend on gas last month?"
+
+
+	Smart categorizing
+		Add fuzzy match
+		then learn overtime  - "If still no match, ask user to confirm, and learn for next time (save mapping)"
+		and OpenAI API matching to categorize transactions
+
+
+
+	Integrate vue
+
+	Be able to edit a transaction - attach receptipts, endit details
+
+	Batch mutithreading
+
+	Be able to attach recepits to transactions
+
+	cache db info - backend or frontend
+
+	Add user authentication - jwt
+
+Phase 3:
+	Rental Property Management
+	Property Profiles: Create profiles for each rental property to track specific income and expenses per property.
+	Tenant Information: Store tenant details (names, lease dates, contact info, payment history).
+	Lease Tracking: Keep track of lease start/end dates, rent am
+
+
+	Create local llm to answer questions about money, calendar eevents, home assistant stuff, baby stuff any data I can gather about me
+
+
+Phase 3:
+	Integrate AI
+		Give details each on each months spending
+		Budget Suggestions: Use AI to analyze past spending and recommend realistic budgets for categories.
+		Expense Forecasting: Predict future expenses based on historical trends.
+		OCR (Optical Character Recognition): Integrate with a service like Azure OCR or use AI APIs to extract details (date, amount, vendor, category) from receipt images.
+		Smart Matching: Use AI to match receipts to transactions by comparing extracted receipt details with your transaction database.
+		Query-Based Reporting: Use natural language processing to allow users to ask questions like "How much did I spend on groceries last month?" or "What are my largest expenses this year?"
+		Trend Analysis: Offer insights like “Your spending on dining out has increased by 20% over the last 3 months.”
+
+	Generate automatic email from template.
+		be able to enter in the two bills
+		upload the two bill documents
+		calculate the correct amounts
+		send email
+
+	Have entities/profiles
+		personal
+		rental business
+		Vehicle
+
+
+-------------------
+
+Dashboard
+
+    Card - horizontal
+         1. Welcome Header
+        Greeting (e.g., “Good morning, Asanka!”)
+        Current date and time
+
+    Card - horizontal
+        AI summerization of this months stuff
+
+    Card - table
+        Card 1
+            Spending by category for past three months
+            spending by merchant past three months
+            Spending my month - past three months
+
+    On the left the other options to select
+
+Add (single) transaction
+    Check for duplicates
+Add bulk transaction
+    Check for duplicates
+    AI categorizing
+    backup data
+
+View transactions
+
+Spending graphs
+
+Payment balancing function
+    	Add more details into the balancing UI
+            What months have been balanced
+            How much each individual
+                expenses from personal paid
+                rent received
+                rental bill received
+                Mortgage paid
+                bills paid
+
+upload a receipt
+    it then attaches itself to a transaction
+    detects all the grocery items
+    then logs them - later check what I boaugt

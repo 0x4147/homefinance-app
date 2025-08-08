@@ -1,0 +1,80 @@
+1. Try contains() match
+First, try simple substring matching (fast and basic).
+
+java
+Copy
+Edit
+String category = tryContainsMapping(entity);
+if (category != null) {
+    return category;
+}
+2. If no match, try fuzzy matching
+If no result from contains, try fuzzy match.
+
+java
+Copy
+Edit
+category = tryFuzzyMapping(entity);
+if (category != null) {
+    return category;
+}
+3. If still no match, flag it for user confirmation
+You can return a special object, log it, or store it in a database to show the user later.
+
+java
+Copy
+Edit
+if (category == null) {
+    flagForUserInput(entity);
+}
+flagForUserInput(entity) could save it to a missing_mappings table, a CSV file, or a JSON list.
+
+Example:
+
+java
+Copy
+Edit
+private void flagForUserInput(String entity) {
+    missingMappings.add(entity); // later you show this list in your app
+}
+4. User Review UI
+In your app (could be a small Spring Boot page, or even a CLI console at first):
+
+List all missing entity names.
+
+Ask the user:
+
+"What category should this entity be assigned to?"
+
+"Which person? (optional)"
+
+Save the user’s answer.
+
+5. Learn and Save
+Once user provides a mapping:
+
+✅ Add it to your known mappings at runtime.
+✅ Save it permanently (e.g., in a JSON file or database) for the next time.
+
+Example:
+
+java
+Copy
+Edit
+public void saveNewMapping(String entity, String category) {
+    ENTITY_TO_TYPE.put(entity.toLowerCase(), category);
+    persistMappings();
+}
+And persistMappings() could save the map to a simple JSON file like entity_mappings.json!
+
+Example JSON:
+
+json
+Copy
+Edit
+{
+  "amazon": "Shopping",
+  "costco": "Groceries",
+  "home depot": "Home Improvement"
+}
+Then next time your app starts, load this mapping first into memory.
