@@ -1,5 +1,5 @@
-import React, { useState, useMemo } from 'react';
-import { ChevronsRight, LayoutDashboard, PlusSquare, List, BarChart2, Calendar, Receipt } from 'lucide-react';
+import React, { useState } from 'react';
+import { LayoutDashboard, PlusSquare, List, BarChart2, Calendar, Receipt } from 'lucide-react';
 
 // --- Type Definitions for TypeScript ---
 // This defines the possible views our application can have.
