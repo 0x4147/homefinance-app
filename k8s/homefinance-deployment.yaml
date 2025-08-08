@@ -1,0 +1,30 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: homefinance
+spec:
+  selector:
+    matchLabels:
+      app: homefinance
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: homefinance
+    spec:
+      containers:
+        - name: homefinance
+          image: homefinance:latest
+          imagePullPolicy: Never # important for local build
+          env:
+            - name: SPRING_DATASOURCE_URL
+              value: jdbc:mysql://mysql:3306/homefinancedb?allowPublicKeyRetrieval=true&useSSL=false&serverTimezone=UTC
+            - name: SPRING_DATASOURCE_USERNAME
+              value: admin
+            - name: SPRING_DATASOURCE_PASSWORD
+              value: password
+            - name: SPRING_PROFILES_ACTIVE
+              value: dev
+          ports:
+            - containerPort: 8585
+            - containerPort: 5005

@@ -1,0 +1,141 @@
+*********************************** Create a Simple Script ***********************************
+
+USE file called deploy.sh:
+
+************************* REMOVE KEBURNETES DEPPLOY *******************************
+
+kubectl delete -f k8s/
+
+************************* Check What's Happening *************************
+
+kubectl get all
+
+kubectl get pvc
+
+# Check pod status
+kubectl get pods
+
+# Delete the stuck pod to force it to restart with the correct image
+kubectl delete pod -l app=homefinance
+
+#check images
+docker images | grep homefinance
+
+# Restart the entire deployment
+kubectl rollout restart deployment/homefinance
+
+
+# Delete the current deployment and redeploy
+kubectl delete deployment homefinance
+kubectl apply -f your-deployment.yaml
+
+# Check the homefinance pod logs
+kubectl logs -l app=homefinance
+kubectl logs homefinance-69bb6467d4-f4sj7
+
+# Check what gets applied:
+kubectl apply -f k8s/ --dry-run=client -o yaml
+
+# Enable the dashboard addon (if not already enabled)
+minikube addons enable dashboard
+
+# Open the dashboard in your browser
+minikube dashboard
+
+# Get detailed pod information
+kubectl describe pod -l app=homefinance
+
+#Force restart the homefinance deployment:
+kubectl rollout restart deployment/homefinance
+
+-----------ALTERNATIVES--------------------------------------------------------
+
+
+***********************************Single Command Deployment***********************************
+# Start minikube
+minikube start
+
+# Build the image
+eval $(minikube docker-env) && docker build -t homefinance:latest .
+
+# Deploy everything at once
+kubectl apply -f .
+
+
+
+***********************************MANUAL DEPLOY***********************************
+
+Complete Deployment Steps
+1. Start Minikube and Configure Docker Environment
+    # Start minikube
+    minikube start
+
+    # Point your Docker CLI to minikube's Docker daemon
+        eval $(minikube docker-env)
+
+2. Build Your Application Image
+    From your project root directory (where the Dockerfile is located):
+    bashdocker build -t homefinance:latest .
+    This will:
+
+    Use Maven to build your Spring Boot application
+    Create a lightweight runtime image with just the JAR file
+    Enable remote debugging on port 5005
+
+3. Deploy to Kubernetes
+    Deploy in this specific order:
+    bash# Deploy MySQL first
+    kubectl apply -f mysql-pvc.yaml
+    kubectl apply -f mysql-deployment.yaml
+    kubectl apply -f mysql-service.yaml
+
+    # Wait for MySQL to be ready
+    kubectl wait --for=condition=ready pod -l app=mysql --timeout=300s
+
+    # Deploy your application
+    kubectl apply -f homefinance-deployment.yaml
+    kubectl apply -f homefinance-service.yaml
+4. Verify Deployment
+    Check that everything is running:
+    bash# Check pods status
+    kubectl get pods
+
+    # Check services
+    kubectl get services
+
+    # Check logs if needed
+    kubectl logs -l app=homefinance
+    kubectl logs -l app=mysql
+5. Access Your Application
+    Get the URLs to access your application:
+    bash# Get service URLs
+    minikube service homefinance --url
+    This will show you something like:
+
+    http://192.168.49.2:30XXX (for port 8585 - your main application)
+    http://192.168.49.2:30YYY (for port 5005 - debug port)
+
+Notes About Your Setup
+    Debugging: Your application is configured with remote debugging enabled on port 5005. You can connect your IDE to this port for debugging.
+    Database Connection: Your app will connect to MySQL at jdbc:mysql://mysql:3306/homefinancedb - this should work correctly with your service configuration.
+    Environment: The SPRING_PROFILES_ACTIVE=dev environment variable is set, so make sure your application has the appropriate dev profile configuration.
+    Troubleshooting
+    If you encounter issues:
+    bash# Check pod logs
+    kubectl logs deployment/homefinance
+    kubectl logs deployment/mysql
+
+# Check pod descriptions for more details
+    kubectl describe pod -l app=homefinance
+    kubectl describe pod -l app=mysql
+
+# Check if the image was built correctly
+    docker images | grep homefinance
+    Clean Up (when needed)
+    To remove everything:
+    bashkubectl delete -f homefinance-service.yaml
+    kubectl delete -f homefinance-deployment.yaml
+    kubectl delete -f mysql-service.yaml
+    kubectl delete -f mysql-deployment.yaml
+    kubectl delete -f mysql-pvc.yaml
+    Your Dockerfile is well-structured with a multi-stage build that keeps the final image size small while including debugging capabilities. The setup should work smoothly with your Kubernetes configuration!

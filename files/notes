@@ -1,0 +1,7 @@
+Add into Transaction table
+    is_shared (is_shared BOOLEAN DEFAULT FALSE)
+    created_by -> batch, manual
+    created_time
+    modified_by
+    modified_time
+    version_no

@@ -1,0 +1,57 @@
+########### Most Used ###########
+
+docker compose down
+    Just removecontainers
+
+docker compose down -v
+    remove all data and volumes
+
+docker compose up --build -d
+    detached state
+
+
+
+docker kill homefinance
+docker image rm homefinance:1.0
+
+mvn clean install
+
+docker build -t homefinance:1.0 .
+docker run --rm --detach --name=homefinance -p 8585:8585 homefinance:1.0
+
+#push to docker hub
+docker tag homefinance:1.0 0x4147/homefinance:1.0
+docker push 0x4147/homefinance:1.0
+
+#Set Java version to 17 temporarily on current session
+export JAVA_HOME="/c/development/IBM/jdk-17.0.9"
+export PATH="$JAVA_HOME/bin:$PATH"
+
+
+########### k8s ###########
+
+minikube start
+
+kubectl apply -f home-finance-secret.yaml
+
+kubectl apply -f home-finance.yaml
+
+kubectl delete deployment homefinance-deployment
+kubectl delete service homefinance-service
+
+Kubectl get all
+kubectl get service
+kubectl get pod
+Kubectl get all | grep searchname
+kubectl get namespace
+
+############ Docker sql #######################
+
+docker run --name homefinance-mysql \
+  -e MYSQL_ROOT_PASSWORD=rootpassword \
+  -e MYSQL_DATABASE=homefinancedb \
+  -e MYSQL_USER=admin \
+  -e MYSQL_PASSWORD=password \
+  -p 3306:3306 \
+  -v C:/development/Personal/PersonalFinanceApp/app/mysql:/var/lib/mysql \
+  -d mysql:latest

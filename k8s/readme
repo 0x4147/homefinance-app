@@ -1,0 +1,17 @@
+# MINIKUBE
+minikube start                       # Start Minikube cluster
+eval $(minikube docker-env)         # Use Minikube’s Docker daemon
+docker build -t homefinance:latest .# Build image inside Minikube
+kubectl apply -f k8s/               # Apply K8s manifests
+minikube service homefinance        # Open service in browser (if configured as NodePort)
+
+______________________________________________________________________________________________________
+# DOCKER DESKTOP KUBERNETES
+
+docker build -t homefinance:latest .
+kubectl apply -f k8s/
+
+______________________________________________________________________________________________________
+
+#Check if using minikube or docker-desktop k8s
+kubectl config current-context

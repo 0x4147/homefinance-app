@@ -1,0 +1,90 @@
+***************************************
+MySQL workbench
+
+Connection name: homefinancedb
+Username: admin
+Password: password
+
+***************************************
+
+MYSQL_ROOT_PASSWORD: rootpassword
+MYSQL_DATABASE: homefinancedb
+MYSQL_USER: admin
+MYSQL_PASSWORD: password
+
+***************************************
+Prepare AMEX csv file:
+
+Open excel file and remove all unwanted rows - leave only data
+save as csv
+Open your .csv file in Notepad++.
+Go to the top menu: Encoding > Convert to UTF-8
+
+***************************************
+
+Monthly items that need to be added manually
+
+Asanka
+    - Electricity + water : bill (expense)
+    - any common items purchased from personal : (expense)
+    - Netflix : bill (expense)
+
+
+Divya
+    - Tentant bill : (income)
+    - Tenant rent  : (income)
+        1 Jan - 31 Nov : 1350
+        1 Dec - 31 April : 1200
+    - any common items purchased from personal : (expense)
+    - property tax : (expense)
+    - mortgage
+
+***************************************
+
+At start up
+
+Add the two csv reports
+
+Add the following:
+
+Tentant bill : (income) - DIVYA
+24 January - Utility bill  : 114.06
+24 February - Utility bill : 77.57
+24 march - Utility bill : 66.40
+24 april - Utility bill : 67.37
+24 may - Utility bill  : 53.22
+24 june - Utility bill  : 54.07
+24 july - Utility bill  : 51.74
+
+24 August - Utility bill  :56.57
+24 September - Utility bill :46.00
+24 October - Utility bill :51.61
+24 Nov - Utility bill : 53.71
+24 Dec - Utility bill : 40.30
+25 Jan - Utility bill : 46.17
+25 Feb - Utility bill : 50.08
+25 March - Utility bill : 37.99
+25 April - Utility bill : 38.46
+
+-----------------------------------------
+
+May 13, 2025	$155.65
+April 11, 2025	$162.80
+March 14, 2025	$182.39
+February 14, 2025	$178.34
+January 14, 2025	$168.63
+December 12, 2024	$150.10
+November 13, 2024	$146.37
+October 15, 2024	$142.00
+September 16, 2024	$157.68
+August 14, 2024	$169.38
+July 15, 2024	$171.03
+June 13, 2024	$163.57
+May 13, 2024	$155.80
+April 12, 2024	$175.87
+March 13, 2024	$160.67
+February 13, 2024	$173.01
+January 12, 2024	$143.61
+
+
+
