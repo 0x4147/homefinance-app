@@ -1,0 +1,18 @@
+Built this project new:
+    npm create vite@latest homefinance-frontend -- --template react-ts
+
+    cd homefinance-frontend
+
+    npm install tailwindcss @tailwindcss/vite
+
+    npm install lucide-react
+
+    Then modify the following files with the details in the link
+        tailwind.config.js
+        ./src/index.css
+
+        @tailwindcss/vite and https://tailwindcss.com/docs/installation/using-vite
+
+    update App.tsx file
+
+    npm run dev
