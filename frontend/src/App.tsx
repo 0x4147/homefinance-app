@@ -248,28 +248,59 @@ const AddBulkTransactions = () => {
     const [selectedBank, setSelectedBank] = useState<'Amex' | 'CIBC' | null>(null);
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
+    // Console logging utility for component
+    const log = {
+        info: (message: string, data?: any) => {
+            console.log(`[AddBulkTransactions] ${message}`, data || '');
+        },
+        error: (message: string, error?: any) => {
+            console.error(`[AddBulkTransactions ERROR] ${message}`, error || '');
+        },
+        debug: (message: string, data?: any) => {
+            console.debug(`[AddBulkTransactions DEBUG] ${message}`, data || '');
+        }
+    };
+
     const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
         if (file) {
+            log.info(`File selected: ${file.name} (${file.size} bytes, type: ${file.type})`);
+            log.debug('File details:', {
+                name: file.name,
+                size: file.size,
+                type: file.type,
+                lastModified: new Date(file.lastModified).toISOString()
+            });
             setSelectedFile(file);
+        } else {
+            log.info('No file selected');
         }
     };
 
     const handleAddTransactions = async () => {
+        log.info('Starting file upload process');
+        log.debug('Current state:', { selectedBank, selectedFile: selectedFile?.name });
+        
         if (!selectedBank || !selectedFile) {
+            log.error('Missing required data for upload', { selectedBank, hasFile: !!selectedFile });
             alert('Please select a bank and upload a file');
             return;
         }
         
         try {
             const sourceType = selectedBank === 'Amex' ? 'amex' : 'cibc';
-            await apiService.uploadTransactionFile(selectedFile, sourceType);
+            log.info(`Preparing to upload file with source type: ${sourceType}`);
+            
+            const result = await apiService.uploadTransactionFile(selectedFile, sourceType);
+            log.info('File upload successful:', result);
             alert(`Successfully uploaded ${selectedFile.name} for ${selectedBank} transactions`);
             
             // Reset form
+            log.info('Resetting form after successful upload');
             setSelectedBank(null);
             setSelectedFile(null);
         } catch (error) {
+            log.error('File upload failed:', error);
             console.error('Error uploading file:', error);
             alert('Failed to upload file. Please try again.');
         }
@@ -284,7 +315,10 @@ const AddBulkTransactions = () => {
                 <label className="block text-sm font-medium text-gray-700 mb-3">Select Bank</label>
                 <div className="flex space-x-4">
                     <button
-                        onClick={() => setSelectedBank('Amex')}
+                        onClick={() => {
+                            log.info('Bank selected: Amex');
+                            setSelectedBank('Amex');
+                        }}
                         className={`px-6 py-3 rounded-lg font-medium transition-colors duration-200 ${
                             selectedBank === 'Amex'
                                 ? 'bg-blue-600 text-white shadow-md'
@@ -294,7 +328,10 @@ const AddBulkTransactions = () => {
                         Amex
                     </button>
                     <button
-                        onClick={() => setSelectedBank('CIBC')}
+                        onClick={() => {
+                            log.info('Bank selected: CIBC');
+                            setSelectedBank('CIBC');
+                        }}
                         className={`px-6 py-3 rounded-lg font-medium transition-colors duration-200 ${
                             selectedBank === 'CIBC'
                                 ? 'bg-blue-600 text-white shadow-md'
