@@ -3,6 +3,8 @@ package ca.homefinance.batch;
 import ca.homefinance.entity.Transaction;
 import ca.homefinance.mapper.AMEXTransactionFieldMapper;
 import ca.homefinance.mapper.CIBCTransactionFieldMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.batch.core.Job;
 import org.springframework.batch.core.Step;
 import org.springframework.batch.core.configuration.annotation.EnableBatchProcessing;
@@ -25,6 +27,8 @@ import org.springframework.batch.core.configuration.annotation.StepScope;
 @EnableBatchProcessing
 public class BatchConfig {
 
+    private static final Logger logger = LoggerFactory.getLogger(BatchConfig.class);
+
     private final TransactionWriter writer;
     private final CIBCTransactionFieldMapper cibcTransactionFieldMapper;
     private final AMEXTransactionFieldMapper amexTransactionFieldMapper;
@@ -41,6 +45,7 @@ public class BatchConfig {
     @Bean
     public Job transactionJob(JobRepository jobRepository,
                               PlatformTransactionManager transactionManager) {
+        logger.info("Creating transaction job");
         return new JobBuilder("transactionJob", jobRepository)
                 .start(importTransactionsStep(jobRepository, transactionManager))
                 .build();
@@ -49,6 +54,7 @@ public class BatchConfig {
     @Bean
     public Step importTransactionsStep(JobRepository jobRepository,
                                        PlatformTransactionManager transactionManager) {
+        logger.info("Creating import transactions step");
         return new StepBuilder("importTransactions", jobRepository)
                 .<Transaction, Transaction>chunk(10, transactionManager)
                 .reader(csvFileReader(null, null)) // Let Spring inject the value
@@ -60,6 +66,8 @@ public class BatchConfig {
     @Bean
     public FlatFileItemReader<Transaction> csvFileReader(@Value("#{jobParameters['filePath']}") String filePath,
                                                          @Value("#{jobParameters['sourceType']}") String sourceType) {
+        logger.info("Creating CSV file reader - FilePath: {}, SourceType: {}", filePath, sourceType);
+        
         FlatFileItemReader<Transaction> reader = new FlatFileItemReader<>();
         reader.setResource(new FileSystemResource(filePath));
         reader.setLinesToSkip(0);
@@ -72,16 +80,22 @@ public class BatchConfig {
 //        tokenizer.setStrict(false);
 
         if ("amex".equalsIgnoreCase(sourceType)) {
+            logger.info("Configuring reader for AMEX format");
             tokenizer.setNames("date", "entity", "person", "amount");
             lineMapper.setFieldSetMapper(amexTransactionFieldMapper);
         } else if ("cibc".equalsIgnoreCase(sourceType)) {
+            logger.info("Configuring reader for CIBC format");
             tokenizer.setNames("date", "entity", "amount out", "amount in", "person");
             lineMapper.setFieldSetMapper(cibcTransactionFieldMapper);
+        } else {
+            logger.error("Unknown source type: {}", sourceType);
+            throw new IllegalArgumentException("Unknown source type: " + sourceType);
         }
 
         lineMapper.setLineTokenizer(tokenizer);
         reader.setLineMapper(lineMapper);
 
+        logger.info("CSV file reader created successfully");
         return reader;
         }
 }
