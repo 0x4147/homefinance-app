@@ -298,12 +298,197 @@ const AddBulkTransactions = () => {
     );
 };
 
-const ViewTransactions = () => (
-    <div className="animate-fade-in">
-        <h2 className="text-3xl font-bold text-gray-900">View Transactions</h2>
-        <p className="mt-2 text-gray-600">Browse, search, and filter your transaction history.</p>
-    </div>
-);
+// Transaction interface for type safety
+interface Transaction {
+    id: number;
+    date: string;
+    type: string;
+    amount: number;
+    account: string;
+    category: string;
+}
+
+const ViewTransactions = () => {
+    const [startDate, setStartDate] = useState<string>('');
+    const [endDate, setEndDate] = useState<string>('');
+    const [transactions, setTransactions] = useState<Transaction[]>([]);
+    const [isLoading, setIsLoading] = useState<boolean>(false);
+
+    // Sample data for demonstration - replace with actual API call
+    const sampleTransactions: Transaction[] = [
+        { id: 1, date: '2024-01-15', type: 'Expense', amount: -125.50, account: 'Amex', category: 'Groceries' },
+        { id: 2, date: '2024-01-14', type: 'Income', amount: 2500.00, account: 'CIBC', category: 'Salary' },
+        { id: 3, date: '2024-01-13', type: 'Expense', amount: -45.00, account: 'Amex', category: 'Entertainment' },
+        { id: 4, date: '2024-01-12', type: 'Expense', amount: -89.99, account: 'CIBC', category: 'Shopping' },
+        { id: 5, date: '2024-01-11', type: 'Expense', amount: -67.50, account: 'Amex', category: 'Dining' },
+        { id: 6, date: '2024-01-10', type: 'Expense', amount: -120.00, account: 'CIBC', category: 'Transportation' },
+        { id: 7, date: '2024-01-09', type: 'Income', amount: 500.00, account: 'CIBC', category: 'Freelance' },
+        { id: 8, date: '2024-01-08', type: 'Expense', amount: -35.00, account: 'Amex', category: 'Utilities' },
+    ];
+
+    const handleFilter = () => {
+        if (!startDate || !endDate) {
+            alert('Please select both start and end dates');
+            return;
+        }
+
+        setIsLoading(true);
+        
+        // Simulate API call delay
+        setTimeout(() => {
+            // Filter sample data based on date range
+            const filteredTransactions = sampleTransactions.filter(transaction => {
+                const transactionDate = new Date(transaction.date);
+                const start = new Date(startDate);
+                const end = new Date(endDate);
+                return transactionDate >= start && transactionDate <= end;
+            });
+            
+            setTransactions(filteredTransactions);
+            setIsLoading(false);
+        }, 1000);
+    };
+
+    const formatCurrency = (amount: number) => {
+        return new Intl.NumberFormat('en-CA', {
+            style: 'currency',
+            currency: 'CAD'
+        }).format(Math.abs(amount));
+    };
+
+    const formatDate = (dateString: string) => {
+        return new Date(dateString).toLocaleDateString('en-CA', {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric'
+        });
+    };
+
+    return (
+        <div className="animate-fade-in max-w-7xl mx-auto">
+            <h2 className="text-3xl font-bold text-gray-900 mb-6">View Transactions</h2>
+            
+            {/* Date Filter Section */}
+            <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm mb-6">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Filter by Date Range</h3>
+                <div className="flex flex-col sm:flex-row gap-4 items-end">
+                    <div className="flex-1">
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Start Date</label>
+                        <input
+                            type="date"
+                            value={startDate}
+                            onChange={(e) => setStartDate(e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        />
+                    </div>
+                    <div className="flex-1">
+                        <label className="block text-sm font-medium text-gray-700 mb-2">End Date</label>
+                        <input
+                            type="date"
+                            value={endDate}
+                            onChange={(e) => setEndDate(e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        />
+                    </div>
+                    <button
+                        onClick={handleFilter}
+                        disabled={!startDate || !endDate || isLoading}
+                        className={`px-6 py-2 rounded-lg font-medium transition-colors duration-200 ${
+                            startDate && endDate && !isLoading
+                                ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-md'
+                                : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                        }`}
+                    >
+                        {isLoading ? 'Loading...' : 'Filter'}
+                    </button>
+                </div>
+            </div>
+
+            {/* Transactions Table */}
+            <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
+                <div className="px-6 py-4 border-b border-gray-200">
+                    <h3 className="text-lg font-semibold text-gray-900">
+                        Transactions {transactions.length > 0 && `(${transactions.length} found)`}
+                    </h3>
+                </div>
+                
+                {transactions.length === 0 && !isLoading ? (
+                    <div className="p-8 text-center text-gray-500">
+                        <svg className="mx-auto h-12 w-12 text-gray-400 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                        <p className="text-lg font-medium">No transactions found</p>
+                        <p className="text-sm">Select a date range and click Filter to view transactions</p>
+                    </div>
+                ) : (
+                    <div className="overflow-x-auto">
+                        <table className="min-w-full divide-y divide-gray-200">
+                            <thead className="bg-gray-50">
+                                <tr>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        Date
+                                    </th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        Type
+                                    </th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        Amount
+                                    </th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        Account
+                                    </th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        Category
+                                    </th>
+                                </tr>
+                            </thead>
+                            <tbody className="bg-white divide-y divide-gray-200">
+                                {isLoading ? (
+                                    <tr>
+                                        <td colSpan={5} className="px-6 py-4 text-center">
+                                            <div className="flex items-center justify-center">
+                                                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+                                                <span className="ml-2 text-gray-600">Loading transactions...</span>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ) : (
+                                    transactions.map((transaction) => (
+                                        <tr key={transaction.id} className="hover:bg-gray-50">
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                                {formatDate(transaction.date)}
+                                            </td>
+                                            <td className="px-6 py-4 whitespace-nowrap">
+                                                <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                                                    transaction.type === 'Income' 
+                                                        ? 'bg-green-100 text-green-800' 
+                                                        : 'bg-red-100 text-red-800'
+                                                }`}>
+                                                    {transaction.type}
+                                                </span>
+                                            </td>
+                                            <td className={`px-6 py-4 whitespace-nowrap text-sm font-medium ${
+                                                transaction.amount >= 0 ? 'text-green-600' : 'text-red-600'
+                                            }`}>
+                                                {transaction.amount >= 0 ? '+' : '-'}{formatCurrency(transaction.amount)}
+                                            </td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                                {transaction.account}
+                                            </td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                                {transaction.category}
+                                            </td>
+                                        </tr>
+                                    ))
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+};
 
 const SpendingInsights = () => (
     <div className="animate-fade-in">
