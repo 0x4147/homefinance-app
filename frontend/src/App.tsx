@@ -890,12 +890,201 @@ const SpendingInsights = () => {
     );
 };
 
-const MonthlyBalanceChecker = () => (
-    <div className="animate-fade-in">
-        <h2 className="text-3xl font-bold text-gray-900">Monthly Balance Checker</h2>
-        <p className="mt-2 text-gray-600">Compare your income and expenses month over month.</p>
-    </div>
-);
+const MonthlyBalanceChecker = () => {
+    const [selectedMonth, setSelectedMonth] = useState<string>('');
+    const [selectedYear, setSelectedYear] = useState<string>('');
+    const [balanceData, setBalanceData] = useState<any>(null);
+    const [isLoading, setIsLoading] = useState<boolean>(false);
+
+    // Generate month options
+    const months = [
+        { value: '01', label: 'January' },
+        { value: '02', label: 'February' },
+        { value: '03', label: 'March' },
+        { value: '04', label: 'April' },
+        { value: '05', label: 'May' },
+        { value: '06', label: 'June' },
+        { value: '07', label: 'July' },
+        { value: '08', label: 'August' },
+        { value: '09', label: 'September' },
+        { value: '10', label: 'October' },
+        { value: '11', label: 'November' },
+        { value: '12', label: 'December' }
+    ];
+
+    // Generate year options (current year and 5 years back)
+    const currentYear = new Date().getFullYear();
+    const years = Array.from({ length: 6 }, (_, i) => currentYear - i);
+
+    const handleCheckBalance = () => {
+        if (!selectedMonth || !selectedYear) {
+            alert('Please select both month and year');
+            return;
+        }
+
+        setIsLoading(true);
+        
+        // Simulate API call delay
+        setTimeout(() => {
+            // Sample data - replace with actual API call
+            const sampleData = {
+                payments: [
+                    { person: 'Asanka', amount: 1250.00 },
+                    { person: 'John', amount: 800.00 },
+                    { person: 'Sarah', amount: 950.00 }
+                ],
+                debts: [
+                    { debtor: 'Mike', amount: 150.00, creditor: 'Asanka' },
+                    { debtor: 'Lisa', amount: 75.50, creditor: 'John' }
+                ]
+            };
+            
+            setBalanceData(sampleData);
+            setIsLoading(false);
+        }, 1000);
+    };
+
+    const formatCurrency = (amount: number) => {
+        return new Intl.NumberFormat('en-CA', {
+            style: 'currency',
+            currency: 'CAD'
+        }).format(amount);
+    };
+
+    const getMonthName = (monthValue: string) => {
+        const month = months.find(m => m.value === monthValue);
+        return month ? month.label : '';
+    };
+
+    return (
+        <div className="animate-fade-in max-w-4xl mx-auto">
+            <h2 className="text-3xl font-bold text-gray-900 mb-6">Monthly Balance Checker</h2>
+            
+            {/* Selection Controls */}
+            <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm mb-6">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Select Month and Year</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-end">
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Month</label>
+                        <select
+                            value={selectedMonth}
+                            onChange={(e) => setSelectedMonth(e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        >
+                            <option value="">Select Month</option>
+                            {months.map((month) => (
+                                <option key={month.value} value={month.value}>
+                                    {month.label}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Year</label>
+                        <select
+                            value={selectedYear}
+                            onChange={(e) => setSelectedYear(e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        >
+                            <option value="">Select Year</option>
+                            {years.map((year) => (
+                                <option key={year} value={year}>
+                                    {year}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+                </div>
+                <div className="mt-4">
+                    <button
+                        onClick={handleCheckBalance}
+                        disabled={!selectedMonth || !selectedYear || isLoading}
+                        className={`px-6 py-2 rounded-lg font-medium transition-colors duration-200 ${
+                            selectedMonth && selectedYear && !isLoading
+                                ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-md'
+                                : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                        }`}
+                    >
+                        {isLoading ? 'Checking...' : 'Check Balance'}
+                    </button>
+                </div>
+            </div>
+
+            {/* Results Display */}
+            {balanceData && (
+                <div className="space-y-6">
+                    {/* Payments Section */}
+                    <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
+                        <h3 className="text-lg font-semibold text-gray-900 mb-4">Payments Made</h3>
+                        <div className="space-y-3">
+                            {balanceData.payments.map((payment: any, index: number) => (
+                                <div key={index} className="p-4 bg-green-50 border border-green-200 rounded-lg">
+                                    <p className="text-green-800 font-medium">
+                                        {payment.person} has paid {formatCurrency(payment.amount)} in {getMonthName(selectedMonth)}, {selectedYear}
+                                    </p>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* Debts Section */}
+                    {balanceData.debts.length > 0 && (
+                        <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
+                            <h3 className="text-lg font-semibold text-gray-900 mb-4">Outstanding Debts</h3>
+                            <div className="space-y-3">
+                                {balanceData.debts.map((debt: any, index: number) => (
+                                    <div key={index} className="p-4 bg-red-50 border border-red-200 rounded-lg">
+                                        <p className="text-red-800 font-medium">
+                                            {debt.debtor} owes {formatCurrency(debt.amount)} to {debt.creditor}
+                                        </p>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Summary */}
+                    <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
+                        <h3 className="text-lg font-semibold text-gray-900 mb-4">Summary</h3>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                                <p className="text-blue-800 font-medium">
+                                    Total Payments: {formatCurrency(balanceData.payments.reduce((sum: number, payment: any) => sum + payment.amount, 0))}
+                                </p>
+                            </div>
+                            <div className="p-4 bg-orange-50 border border-orange-200 rounded-lg">
+                                <p className="text-orange-800 font-medium">
+                                    Total Outstanding: {formatCurrency(balanceData.debts.reduce((sum: number, debt: any) => sum + debt.amount, 0))}
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Empty State */}
+            {!balanceData && !isLoading && (
+                <div className="bg-white border border-gray-200 rounded-xl p-8 shadow-sm text-center">
+                    <svg className="mx-auto h-12 w-12 text-gray-400 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                    </svg>
+                    <p className="text-lg font-medium text-gray-900 mb-2">No Balance Data</p>
+                    <p className="text-gray-600">Select a month and year, then click "Check Balance" to view the monthly balance information.</p>
+                </div>
+            )}
+
+            {/* Loading State */}
+            {isLoading && (
+                <div className="bg-white border border-gray-200 rounded-xl p-8 shadow-sm text-center">
+                    <div className="flex items-center justify-center">
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                        <span className="ml-3 text-gray-600">Checking balance for {getMonthName(selectedMonth)} {selectedYear}...</span>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
 
 const AddReceipt = () => (
     <div className="animate-fade-in">
