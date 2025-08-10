@@ -1,5 +1,10 @@
-import React, { useState } from 'react';
-import { LayoutDashboard, PlusSquare, List, BarChart2, Calendar, Receipt } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { LayoutDashboard, PlusSquare, List, BarChart2, Calendar, Receipt, Brain } from 'lucide-react';
+import { Chart as ChartJS, ArcElement, Tooltip, Legend, CategoryScale, LinearScale, PointElement, LineElement, Title } from 'chart.js';
+import { Pie, Line } from 'react-chartjs-2';
+
+// Register Chart.js components
+ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, PointElement, LineElement, Title);
 
 // --- Type Definitions for TypeScript ---
 // This defines the possible views our application can have.
@@ -11,28 +16,179 @@ type View =
   | 'MonthlyBalanceChecker'
   | 'AddReceipt';
 
-// --- Placeholder Components for Each View ---
-// In a larger application, each of these would be in its own .tsx file.
+// --- Welcome Header Component ---
+const WelcomeHeader = () => {
+    const [currentTime, setCurrentTime] = useState(new Date());
 
-const Dashboard = () => (
-    <div className="max-w-4xl mx-auto animate-fade-in">
-        <h2 className="text-3xl font-bold text-gray-900 mb-6">Dashboard</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            <div className="bg-gray-100 p-6 rounded-xl shadow-sm hover:shadow-md transition-shadow">
-                <h3 className="font-semibold text-gray-700">Account Balance</h3>
-                <p className="text-3xl font-bold text-gray-900 mt-2">$12,450.78</p>
-            </div>
-            <div className="bg-gray-100 p-6 rounded-xl shadow-sm hover:shadow-md transition-shadow">
-                <h3 className="font-semibold text-gray-700">Monthly Spending</h3>
-                <p className="text-3xl font-bold text-gray-900 mt-2">$2,134.50</p>
-            </div>
-            <div className="bg-gray-100 p-6 rounded-xl shadow-sm hover:shadow-md transition-shadow">
-                <h3 className="font-semibold text-gray-700">Upcoming Bills</h3>
-                <p className="text-3xl font-bold text-gray-900 mt-2">3</p>
+    useEffect(() => {
+        const timer = setInterval(() => {
+            setCurrentTime(new Date());
+        }, 1000);
+
+        return () => clearInterval(timer);
+    }, []);
+
+    const getGreeting = () => {
+        const hour = currentTime.getHours();
+        if (hour < 12) return 'Good Morning';
+        if (hour < 17) return 'Good Afternoon';
+        return 'Good Evening';
+    };
+
+    const formatDate = (date: Date) => {
+        return date.toLocaleDateString('en-US', {
+            weekday: 'long',
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric'
+        });
+    };
+
+    const formatTime = (date: Date) => {
+        return date.toLocaleTimeString('en-US', {
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit'
+        });
+    };
+
+    return (
+        <div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white p-8 rounded-xl shadow-lg mb-8">
+            <div className="flex items-center justify-between">
+                <div>
+                    <h1 className="text-4xl font-bold mb-2">{getGreeting()}!</h1>
+                    <p className="text-xl opacity-90">Welcome to your Home Finance Dashboard</p>
+                </div>
+                <div className="text-right">
+                    <p className="text-2xl font-semibold">{formatDate(currentTime)}</p>
+                    <p className="text-xl opacity-90">{formatTime(currentTime)}</p>
+                </div>
             </div>
         </div>
-    </div>
-);
+    );
+};
+
+// --- Athena Summary Component ---
+const AthenaSummary = () => {
+    return (
+        <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm mb-8">
+            <div className="flex items-center mb-4">
+                <Brain className="w-6 h-6 text-purple-600 mr-3" />
+                <h2 className="text-2xl font-bold text-gray-900">Athena's Insights</h2>
+            </div>
+            <div className="bg-gradient-to-r from-purple-50 to-blue-50 border border-purple-200 rounded-lg p-6">
+                <p className="text-gray-700 text-lg leading-relaxed">
+                    <span className="font-semibold text-purple-700">Athena Analysis:</span> Based on your recent transactions, 
+                    I've noticed some interesting patterns in your spending habits. Your grocery expenses have increased by 15% 
+                    compared to last month, while entertainment spending has decreased. You're doing well with your budget 
+                    allocation for utilities and transportation. Consider reviewing your dining out expenses as they're 
+                    trending upward.
+                </p>
+                <div className="mt-4 text-sm text-gray-600">
+                    <p>• Analysis based on transactions from the past 30 days</p>
+                    <p>• Generated by local AI assistant Athena</p>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+// --- Pie Chart Component ---
+const PieChartCard = ({ title, data, colors }: { title: string; data: any; colors: string[] }) => {
+    const chartData = {
+        labels: data.labels,
+        datasets: [
+            {
+                data: data.values,
+                backgroundColor: colors,
+                borderColor: colors.map(color => color + '80'),
+                borderWidth: 2,
+            },
+        ],
+    };
+
+    const options = {
+        responsive: true,
+        plugins: {
+            legend: {
+                position: 'bottom' as const,
+                labels: {
+                    padding: 20,
+                    usePointStyle: true,
+                },
+            },
+            tooltip: {
+                callbacks: {
+                    label: function(context: any) {
+                        const label = context.label || '';
+                        const value = context.parsed;
+                        const total = context.dataset.data.reduce((a: number, b: number) => a + b, 0);
+                        const percentage = ((value / total) * 100).toFixed(1);
+                        return `${label}: $${value.toLocaleString()} (${percentage}%)`;
+                    }
+                }
+            }
+        },
+    };
+
+    return (
+        <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">{title}</h3>
+            <div className="h-64">
+                <Pie data={chartData} options={options} />
+            </div>
+        </div>
+    );
+};
+
+// --- Dashboard Component ---
+const Dashboard = () => {
+    // Placeholder data for the pie charts
+    const categoryData = {
+        labels: ['Groceries', 'Entertainment', 'Transportation', 'Utilities', 'Dining', 'Shopping'],
+        values: [1200, 800, 600, 400, 350, 300]
+    };
+
+    const merchantData = {
+        labels: ['Walmart', 'Netflix', 'Shell', 'Hydro One', 'Restaurant A', 'Amazon'],
+        values: [800, 15, 200, 150, 300, 250]
+    };
+
+    const monthlyData = {
+        labels: ['January', 'February', 'March'],
+        values: [2800, 3200, 2650]
+    };
+
+    const colors = [
+        '#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#06B6D4',
+        '#84CC16', '#F97316', '#EC4899', '#6366F1', '#14B8A6', '#F43F5E'
+    ];
+
+    return (
+        <div className="max-w-7xl mx-auto animate-fade-in">
+            <WelcomeHeader />
+            <AthenaSummary />
+            
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <PieChartCard 
+                    title="Spending by Category (Past 3 Months)" 
+                    data={categoryData} 
+                    colors={colors.slice(0, 6)} 
+                />
+                <PieChartCard 
+                    title="Spending by Merchant (Past 3 Months)" 
+                    data={merchantData} 
+                    colors={colors.slice(6, 12)} 
+                />
+                <PieChartCard 
+                    title="Spending by Month (Past 3 Months)" 
+                    data={monthlyData} 
+                    colors={colors.slice(0, 3)} 
+                />
+            </div>
+        </div>
+    );
+};
 
 const AddBulkTransactions = () => (
     <div className="animate-fade-in">

@@ -1,0 +1,65 @@
+For the Dashboard content, instead of what Ihave now I want a Welcome Header that has a greeting and current date and time
+
+then underneath is a a summery of the latest months transactions. This is going to be only a place holder for now, later I will integrate my local AI with the transaction details to get the output that I need.
+My local AI is called Athena, so it can have a placeholder for now where it indicates that this is an output from "Athena".
+
+Then underneath it is 3 cards in a row. Each card has three pie charts. I will need to integrate these into my backend to receive the correct data so it displays valid data. For now I just want placeholders so I can work on the integration later. 
+First card wold be for Spending by category for past three months, second would be for spending by merchant past three months and thrid would be for Spending my month - past three months
+
+--------------------------
+
+
+For the AddBulkTransactions I want to replace what's there at the moment with a title that says "Upload Transactions file"
+
+Two buttons that can be toggled to select. ONe named "Amex" the other named "CIBC"
+
+Then the option to upload a file.
+
+The button and the file would be tied to gether so that information can be sent to the backend. 
+
+Then finally a button "Add transactions" 
+
+These are only palce holders for now.
+
+
+--------------------------
+
+for ViewTransactions section, I want to have two boxes that is start date and end date a user can select then a botton name "filter".
+
+then a table that displays the information that it will retrieve from the backend.
+
+the dable consit of Date, Type, Amount, Account, Category.
+
+------
+
+For SpendingInsights there will be mutiple options to choose from. 
+
+
+Ask Athena's analysys, Spending by category, Top Merchants, spending by month, history
+
+Each option would bring up the content that would be generated, each are not related.
+
+"Ask Athena's analsys" would have a text box and and button to submit. I will later integrate my local AI that sends a response. There should be an area for the response.
+
+Spending by category option would have two date boxes, start date and end date and a button "submit"
+
+That button will then bring up a pie chart with spending by category for the given date range
+
+Top Merchants option would have two date boxes, start date and end date and a button "submit"
+
+That button will then bring up a pie chart with top merchants for the given date range
+
+Spending by month option would have two month boxes, start month and end month and a submit button
+
+the button will bring up a bar chart with each months total spending.
+
+-----
+
+For MonthlyBalanceChecker, I want a dropb down box to select a month and another dropdown box to select a year. The a button named "check balance"
+And once the check balance button is hit, it would call my backend and display the following,
+
+Asanka has paid $placeholderamount in $placeholderselectedmonth, $placeholderselectedyear
+
+Asanka has paid $placeholderamount in $placeholderselectedmonth, $placeholderselectedyear
+
+$placeholdername owes $placeholderamount to $placeholdername

@@ -1,0 +1,34 @@
+make front end a container so it can talk to back end
+
+
+Dashboard:
+    
+    API call - to receive pie chart info
+    
+    Make ui pretti
+
+    Integrate athena
+
+Add bulk transactions:
+
+    API call - add transactions
+
+view transactions:
+
+    API call  - retrieve transactions
+
+Spending insightss:
+
+    API call - same as dashboard + history
+
+Monthly balance checker:
+
+    API call - retrieve balance
+
+athena:
+    dashboard
+        last months transaction summary
+
+    Spending insights:
+        analysys
+
