@@ -490,12 +490,405 @@ const ViewTransactions = () => {
     );
 };
 
-const SpendingInsights = () => (
-    <div className="animate-fade-in">
-        <h2 className="text-3xl font-bold text-gray-900">Spending Insights</h2>
-        <p className="mt-2 text-gray-600">Visualize your spending habits with charts and graphs.</p>
-    </div>
-);
+// Bar Chart Component for monthly spending
+const BarChartCard = ({ title, data, colors }: { title: string; data: any; colors: string[] }) => {
+    const chartData = {
+        labels: data.labels,
+        datasets: [
+            {
+                label: 'Spending',
+                data: data.values,
+                backgroundColor: colors,
+                borderColor: colors.map(color => color + '80'),
+                borderWidth: 1,
+            },
+        ],
+    };
+
+    const options = {
+        responsive: true,
+        plugins: {
+            legend: {
+                display: false,
+            },
+            tooltip: {
+                callbacks: {
+                    label: function(context: any) {
+                        return `$${context.parsed.y.toLocaleString()}`;
+                    }
+                }
+            }
+        },
+        scales: {
+            y: {
+                beginAtZero: true,
+                ticks: {
+                    callback: function(value: any) {
+                        return '$' + value.toLocaleString();
+                    }
+                }
+            }
+        }
+    };
+
+    return (
+        <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">{title}</h3>
+            <div className="h-64">
+                <Line data={chartData} options={options} />
+            </div>
+        </div>
+    );
+};
+
+const SpendingInsights = () => {
+    const [selectedOption, setSelectedOption] = useState<string>('');
+    const [athenaQuery, setAthenaQuery] = useState<string>('');
+    const [athenaResponse, setAthenaResponse] = useState<string>('');
+    const [isAthenaLoading, setIsAthenaLoading] = useState<boolean>(false);
+    const [startDate, setStartDate] = useState<string>('');
+    const [endDate, setEndDate] = useState<string>('');
+    const [startMonth, setStartMonth] = useState<string>('');
+    const [endMonth, setEndMonth] = useState<string>('');
+    const [chartData, setChartData] = useState<any>(null);
+    const [isLoading, setIsLoading] = useState<boolean>(false);
+
+    const colors = [
+        '#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#06B6D4',
+        '#84CC16', '#F97316', '#EC4899', '#6366F1', '#14B8A6', '#F43F5E'
+    ];
+
+    // Sample data for different chart types
+    const sampleCategoryData = {
+        labels: ['Groceries', 'Entertainment', 'Transportation', 'Utilities', 'Dining', 'Shopping'],
+        values: [1200, 800, 600, 400, 350, 300]
+    };
+
+    const sampleMerchantData = {
+        labels: ['Walmart', 'Netflix', 'Shell', 'Hydro One', 'Restaurant A', 'Amazon'],
+        values: [800, 15, 200, 150, 300, 250]
+    };
+
+    const sampleMonthlyData = {
+        labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
+        values: [2800, 3200, 2650, 3100, 2900, 3400]
+    };
+
+    const handleAthenaSubmit = () => {
+        if (!athenaQuery.trim()) {
+            alert('Please enter a question for Athena');
+            return;
+        }
+
+        setIsAthenaLoading(true);
+        
+        // Simulate AI response delay
+        setTimeout(() => {
+            setAthenaResponse(`Athena's Analysis: Based on your question "${athenaQuery}", I can see that your spending patterns show interesting trends. Your grocery expenses have increased by 15% compared to last month, while entertainment spending has decreased. You're doing well with your budget allocation for utilities and transportation. Consider reviewing your dining out expenses as they're trending upward.`);
+            setIsAthenaLoading(false);
+        }, 2000);
+    };
+
+    const handleDateRangeSubmit = () => {
+        if (!startDate || !endDate) {
+            alert('Please select both start and end dates');
+            return;
+        }
+
+        setIsLoading(true);
+        
+        // Simulate API call delay
+        setTimeout(() => {
+            if (selectedOption === 'category') {
+                setChartData(sampleCategoryData);
+            } else if (selectedOption === 'merchant') {
+                setChartData(sampleMerchantData);
+            }
+            setIsLoading(false);
+        }, 1000);
+    };
+
+    const handleMonthlySubmit = () => {
+        if (!startMonth || !endMonth) {
+            alert('Please select both start and end months');
+            return;
+        }
+
+        setIsLoading(true);
+        
+        // Simulate API call delay
+        setTimeout(() => {
+            setChartData(sampleMonthlyData);
+            setIsLoading(false);
+        }, 1000);
+    };
+
+    const renderOptionContent = () => {
+        switch (selectedOption) {
+            case 'athena':
+                return (
+                    <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
+                        <h3 className="text-lg font-semibold text-gray-900 mb-4">Ask Athena's Analysis</h3>
+                        <div className="space-y-4">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">Your Question</label>
+                                <textarea
+                                    value={athenaQuery}
+                                    onChange={(e) => setAthenaQuery(e.target.value)}
+                                    placeholder="Ask Athena about your spending patterns, budget advice, or financial insights..."
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 h-24 resize-none"
+                                />
+                            </div>
+                            <button
+                                onClick={handleAthenaSubmit}
+                                disabled={!athenaQuery.trim() || isAthenaLoading}
+                                className={`px-6 py-2 rounded-lg font-medium transition-colors duration-200 ${
+                                    athenaQuery.trim() && !isAthenaLoading
+                                        ? 'bg-purple-600 text-white hover:bg-purple-700 shadow-md'
+                                        : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                }`}
+                            >
+                                {isAthenaLoading ? 'Analyzing...' : 'Submit to Athena'}
+                            </button>
+                            {athenaResponse && (
+                                <div className="mt-6 p-4 bg-gradient-to-r from-purple-50 to-blue-50 border border-purple-200 rounded-lg">
+                                    <p className="text-gray-700 leading-relaxed">{athenaResponse}</p>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                );
+
+            case 'category':
+                return (
+                    <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
+                        <h3 className="text-lg font-semibold text-gray-900 mb-4">Spending by Category</h3>
+                        <div className="space-y-4">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">Start Date</label>
+                                    <input
+                                        type="date"
+                                        value={startDate}
+                                        onChange={(e) => setStartDate(e.target.value)}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">End Date</label>
+                                    <input
+                                        type="date"
+                                        value={endDate}
+                                        onChange={(e) => setEndDate(e.target.value)}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                    />
+                                </div>
+                            </div>
+                            <button
+                                onClick={handleDateRangeSubmit}
+                                disabled={!startDate || !endDate || isLoading}
+                                className={`px-6 py-2 rounded-lg font-medium transition-colors duration-200 ${
+                                    startDate && endDate && !isLoading
+                                        ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-md'
+                                        : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                }`}
+                            >
+                                {isLoading ? 'Loading...' : 'Submit'}
+                            </button>
+                            {chartData && (
+                                <div className="mt-6">
+                                    <PieChartCard 
+                                        title="Spending by Category" 
+                                        data={chartData} 
+                                        colors={colors.slice(0, 6)} 
+                                    />
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                );
+
+            case 'merchant':
+                return (
+                    <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
+                        <h3 className="text-lg font-semibold text-gray-900 mb-4">Top Merchants</h3>
+                        <div className="space-y-4">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">Start Date</label>
+                                    <input
+                                        type="date"
+                                        value={startDate}
+                                        onChange={(e) => setStartDate(e.target.value)}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">End Date</label>
+                                    <input
+                                        type="date"
+                                        value={endDate}
+                                        onChange={(e) => setEndDate(e.target.value)}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                    />
+                                </div>
+                            </div>
+                            <button
+                                onClick={handleDateRangeSubmit}
+                                disabled={!startDate || !endDate || isLoading}
+                                className={`px-6 py-2 rounded-lg font-medium transition-colors duration-200 ${
+                                    startDate && endDate && !isLoading
+                                        ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-md'
+                                        : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                }`}
+                            >
+                                {isLoading ? 'Loading...' : 'Submit'}
+                            </button>
+                            {chartData && (
+                                <div className="mt-6">
+                                    <PieChartCard 
+                                        title="Top Merchants" 
+                                        data={chartData} 
+                                        colors={colors.slice(6, 12)} 
+                                    />
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                );
+
+            case 'monthly':
+                return (
+                    <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
+                        <h3 className="text-lg font-semibold text-gray-900 mb-4">Spending by Month</h3>
+                        <div className="space-y-4">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">Start Month</label>
+                                    <input
+                                        type="month"
+                                        value={startMonth}
+                                        onChange={(e) => setStartMonth(e.target.value)}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">End Month</label>
+                                    <input
+                                        type="month"
+                                        value={endMonth}
+                                        onChange={(e) => setEndMonth(e.target.value)}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                    />
+                                </div>
+                            </div>
+                            <button
+                                onClick={handleMonthlySubmit}
+                                disabled={!startMonth || !endMonth || isLoading}
+                                className={`px-6 py-2 rounded-lg font-medium transition-colors duration-200 ${
+                                    startMonth && endMonth && !isLoading
+                                        ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-md'
+                                        : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                }`}
+                            >
+                                {isLoading ? 'Loading...' : 'Submit'}
+                            </button>
+                            {chartData && (
+                                <div className="mt-6">
+                                    <BarChartCard 
+                                        title="Monthly Spending" 
+                                        data={chartData} 
+                                        colors={colors.slice(0, 6)} 
+                                    />
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                );
+
+            default:
+                return (
+                    <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
+                        <div className="text-center text-gray-500">
+                            <svg className="mx-auto h-12 w-12 text-gray-400 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                            </svg>
+                            <p className="text-lg font-medium">Select an option to view insights</p>
+                            <p className="text-sm">Choose from the options above to analyze your spending patterns</p>
+                        </div>
+                    </div>
+                );
+        }
+    };
+
+    return (
+        <div className="animate-fade-in max-w-7xl mx-auto">
+            <h2 className="text-3xl font-bold text-gray-900 mb-6">Spending Insights</h2>
+            
+            {/* Option Selection */}
+            <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm mb-6">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Choose Analysis Type</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <button
+                        onClick={() => setSelectedOption('athena')}
+                        className={`p-4 rounded-lg border-2 transition-colors duration-200 ${
+                            selectedOption === 'athena'
+                                ? 'border-purple-500 bg-purple-50 text-purple-700'
+                                : 'border-gray-200 hover:border-gray-300 text-gray-700'
+                        }`}
+                    >
+                        <div className="text-center">
+                            <Brain className="w-8 h-8 mx-auto mb-2" />
+                            <span className="font-medium">Ask Athena's Analysis</span>
+                        </div>
+                    </button>
+                    <button
+                        onClick={() => setSelectedOption('category')}
+                        className={`p-4 rounded-lg border-2 transition-colors duration-200 ${
+                            selectedOption === 'category'
+                                ? 'border-blue-500 bg-blue-50 text-blue-700'
+                                : 'border-gray-200 hover:border-gray-300 text-gray-700'
+                        }`}
+                    >
+                        <div className="text-center">
+                            <BarChart2 className="w-8 h-8 mx-auto mb-2" />
+                            <span className="font-medium">Spending by Category</span>
+                        </div>
+                    </button>
+                    <button
+                        onClick={() => setSelectedOption('merchant')}
+                        className={`p-4 rounded-lg border-2 transition-colors duration-200 ${
+                            selectedOption === 'merchant'
+                                ? 'border-green-500 bg-green-50 text-green-700'
+                                : 'border-gray-200 hover:border-gray-300 text-gray-700'
+                        }`}
+                    >
+                        <div className="text-center">
+                            <BarChart2 className="w-8 h-8 mx-auto mb-2" />
+                            <span className="font-medium">Top Merchants</span>
+                        </div>
+                    </button>
+                    <button
+                        onClick={() => setSelectedOption('monthly')}
+                        className={`p-4 rounded-lg border-2 transition-colors duration-200 ${
+                            selectedOption === 'monthly'
+                                ? 'border-orange-500 bg-orange-50 text-orange-700'
+                                : 'border-gray-200 hover:border-gray-300 text-gray-700'
+                        }`}
+                    >
+                        <div className="text-center">
+                            <Calendar className="w-8 h-8 mx-auto mb-2" />
+                            <span className="font-medium">Spending by Month</span>
+                        </div>
+                    </button>
+                </div>
+            </div>
+
+            {/* Content Area */}
+            {renderOptionContent()}
+        </div>
+    );
+};
 
 const MonthlyBalanceChecker = () => (
     <div className="animate-fade-in">
