@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { LayoutDashboard, PlusSquare, List, BarChart2, Calendar, Receipt, Brain } from 'lucide-react';
 import { Chart as ChartJS, ArcElement, Tooltip, Legend, CategoryScale, LinearScale, PointElement, LineElement, Title } from 'chart.js';
 import { Pie, Line } from 'react-chartjs-2';
+import { apiService } from './services/api';
+import type { TransactionDto, MonthlyBalanceResponseDto } from './services/api';
 
 // Register Chart.js components
 ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, PointElement, LineElement, Title);
@@ -143,26 +145,78 @@ const PieChartCard = ({ title, data, colors }: { title: string; data: any; color
 
 // --- Dashboard Component ---
 const Dashboard = () => {
-    // Placeholder data for the pie charts
-    const categoryData = {
-        labels: ['Groceries', 'Entertainment', 'Transportation', 'Utilities', 'Dining', 'Shopping'],
-        values: [1200, 800, 600, 400, 350, 300]
-    };
-
-    const merchantData = {
-        labels: ['Walmart', 'Netflix', 'Shell', 'Hydro One', 'Restaurant A', 'Amazon'],
-        values: [800, 15, 200, 150, 300, 250]
-    };
-
-    const monthlyData = {
-        labels: ['January', 'February', 'March'],
-        values: [2800, 3200, 2650]
-    };
+    const [categoryData, setCategoryData] = useState<{ labels: string[]; values: number[] }>({ labels: [], values: [] });
+    const [merchantData, setMerchantData] = useState<{ labels: string[]; values: number[] }>({ labels: [], values: [] });
+    const [monthlyData, setMonthlyData] = useState<{ labels: string[]; values: number[] }>({ labels: [], values: [] });
+    const [isLoading, setIsLoading] = useState(true);
 
     const colors = [
         '#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#06B6D4',
         '#84CC16', '#F97316', '#EC4899', '#6366F1', '#14B8A6', '#F43F5E'
     ];
+
+    useEffect(() => {
+        const loadDashboardData = async () => {
+            try {
+                // Get current date and 3 months ago
+                const now = new Date();
+                const threeMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 3, 1);
+                const startDate = threeMonthsAgo.toISOString().split('T')[0];
+                const endDate = now.toISOString().split('T')[0];
+
+                // Load category data
+                const categoryResponse = await apiService.getExpensesByCategory(startDate, endDate);
+                if (categoryResponse) {
+                    setCategoryData({
+                        labels: Object.keys(categoryResponse.totals),
+                        values: Object.values(categoryResponse.totals).map(val => Number(val))
+                    });
+                }
+
+                // Load merchant data
+                const merchantResponse = await apiService.getExpensesByEntity(startDate, endDate);
+                if (merchantResponse) {
+                    setMerchantData({
+                        labels: Object.keys(merchantResponse.totals),
+                        values: Object.values(merchantResponse.totals).map(val => Number(val))
+                    });
+                }
+
+                // Load monthly data
+                const startMonth = threeMonthsAgo.toISOString().slice(0, 7); // YYYY-MM format
+                const endMonth = now.toISOString().slice(0, 7);
+                const monthlyResponse = await apiService.getExpensesByMonth(startMonth, endMonth);
+                if (monthlyResponse) {
+                    setMonthlyData({
+                        labels: Object.keys(monthlyResponse.totals).map(month => {
+                            const [year, monthNum] = month.split('-');
+                            const date = new Date(parseInt(year), parseInt(monthNum) - 1);
+                            return date.toLocaleDateString('en-US', { month: 'long' });
+                        }),
+                        values: Object.values(monthlyResponse.totals).map(val => Number(val))
+                    });
+                }
+            } catch (error) {
+                console.error('Error loading dashboard data:', error);
+            } finally {
+                setIsLoading(false);
+            }
+        };
+
+        loadDashboardData();
+    }, []);
+
+    if (isLoading) {
+        return (
+            <div className="max-w-7xl mx-auto animate-fade-in">
+                <WelcomeHeader />
+                <div className="flex items-center justify-center h-64">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+                    <span className="ml-3 text-gray-600">Loading dashboard data...</span>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="max-w-7xl mx-auto animate-fade-in">
@@ -201,15 +255,24 @@ const AddBulkTransactions = () => {
         }
     };
 
-    const handleAddTransactions = () => {
+    const handleAddTransactions = async () => {
         if (!selectedBank || !selectedFile) {
             alert('Please select a bank and upload a file');
             return;
         }
         
-        // Placeholder for now - will be implemented later
-        console.log('Adding transactions for:', selectedBank, 'with file:', selectedFile.name);
-        alert(`Processing ${selectedFile.name} for ${selectedBank} transactions`);
+        try {
+            const sourceType = selectedBank === 'Amex' ? 'amex' : 'cibc';
+            await apiService.uploadTransactionFile(selectedFile, sourceType);
+            alert(`Successfully uploaded ${selectedFile.name} for ${selectedBank} transactions`);
+            
+            // Reset form
+            setSelectedBank(null);
+            setSelectedFile(null);
+        } catch (error) {
+            console.error('Error uploading file:', error);
+            alert('Failed to upload file. Please try again.');
+        }
     };
 
     return (
@@ -298,55 +361,31 @@ const AddBulkTransactions = () => {
     );
 };
 
-// Transaction interface for type safety
-interface Transaction {
-    id: number;
-    date: string;
-    type: string;
-    amount: number;
-    account: string;
-    category: string;
-}
-
 const ViewTransactions = () => {
     const [startDate, setStartDate] = useState<string>('');
     const [endDate, setEndDate] = useState<string>('');
-    const [transactions, setTransactions] = useState<Transaction[]>([]);
+    const [transactions, setTransactions] = useState<TransactionDto[]>([]);
     const [isLoading, setIsLoading] = useState<boolean>(false);
+    const [error, setError] = useState<string>('');
 
-    // Sample data for demonstration - replace with actual API call
-    const sampleTransactions: Transaction[] = [
-        { id: 1, date: '2024-01-15', type: 'Expense', amount: -125.50, account: 'Amex', category: 'Groceries' },
-        { id: 2, date: '2024-01-14', type: 'Income', amount: 2500.00, account: 'CIBC', category: 'Salary' },
-        { id: 3, date: '2024-01-13', type: 'Expense', amount: -45.00, account: 'Amex', category: 'Entertainment' },
-        { id: 4, date: '2024-01-12', type: 'Expense', amount: -89.99, account: 'CIBC', category: 'Shopping' },
-        { id: 5, date: '2024-01-11', type: 'Expense', amount: -67.50, account: 'Amex', category: 'Dining' },
-        { id: 6, date: '2024-01-10', type: 'Expense', amount: -120.00, account: 'CIBC', category: 'Transportation' },
-        { id: 7, date: '2024-01-09', type: 'Income', amount: 500.00, account: 'CIBC', category: 'Freelance' },
-        { id: 8, date: '2024-01-08', type: 'Expense', amount: -35.00, account: 'Amex', category: 'Utilities' },
-    ];
-
-    const handleFilter = () => {
+    const handleFilter = async () => {
         if (!startDate || !endDate) {
             alert('Please select both start and end dates');
             return;
         }
 
         setIsLoading(true);
+        setError('');
         
-        // Simulate API call delay
-        setTimeout(() => {
-            // Filter sample data based on date range
-            const filteredTransactions = sampleTransactions.filter(transaction => {
-                const transactionDate = new Date(transaction.date);
-                const start = new Date(startDate);
-                const end = new Date(endDate);
-                return transactionDate >= start && transactionDate <= end;
-            });
-            
-            setTransactions(filteredTransactions);
+        try {
+            const data = await apiService.getTransactionsByDateRange(startDate, endDate);
+            setTransactions(data);
+        } catch (err) {
+            console.error('Error fetching transactions:', err);
+            setError('Failed to fetch transactions. Please try again.');
+        } finally {
             setIsLoading(false);
-        }, 1000);
+        }
     };
 
     const formatCurrency = (amount: number) => {
@@ -404,6 +443,18 @@ const ViewTransactions = () => {
                 </div>
             </div>
 
+            {/* Error Display */}
+            {error && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
+                    <div className="flex items-center">
+                        <svg className="w-5 h-5 text-red-500 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                        </svg>
+                        <span className="text-red-700 font-medium">{error}</span>
+                    </div>
+                </div>
+            )}
+
             {/* Transactions Table */}
             <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
                 <div className="px-6 py-4 border-b border-gray-200">
@@ -453,18 +504,18 @@ const ViewTransactions = () => {
                                         </td>
                                     </tr>
                                 ) : (
-                                    transactions.map((transaction) => (
-                                        <tr key={transaction.id} className="hover:bg-gray-50">
+                                    transactions.map((transaction, index) => (
+                                        <tr key={index} className="hover:bg-gray-50">
                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                                                 {formatDate(transaction.date)}
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap">
                                                 <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                                                    transaction.type === 'Income' 
+                                                    transaction.transactionType === 'INCOME' 
                                                         ? 'bg-green-100 text-green-800' 
                                                         : 'bg-red-100 text-red-800'
                                                 }`}>
-                                                    {transaction.type}
+                                                    {transaction.transactionType}
                                                 </span>
                                             </td>
                                             <td className={`px-6 py-4 whitespace-nowrap text-sm font-medium ${
@@ -559,20 +610,20 @@ const SpendingInsights = () => {
     ];
 
     // Sample data for different chart types
-    const sampleCategoryData = {
-        labels: ['Groceries', 'Entertainment', 'Transportation', 'Utilities', 'Dining', 'Shopping'],
-        values: [1200, 800, 600, 400, 350, 300]
-    };
+    // const sampleCategoryData = {
+    //     labels: ['Groceries', 'Entertainment', 'Transportation', 'Utilities', 'Dining', 'Shopping'],
+    //     values: [1200, 800, 600, 400, 350, 300]
+    // };
 
-    const sampleMerchantData = {
-        labels: ['Walmart', 'Netflix', 'Shell', 'Hydro One', 'Restaurant A', 'Amazon'],
-        values: [800, 15, 200, 150, 300, 250]
-    };
+    // const sampleMerchantData = {
+    //     labels: ['Walmart', 'Netflix', 'Shell', 'Hydro One', 'Restaurant A', 'Amazon'],
+    //     values: [800, 15, 200, 150, 300, 250]
+    // };
 
-    const sampleMonthlyData = {
-        labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
-        values: [2800, 3200, 2650, 3100, 2900, 3400]
-    };
+    // const sampleMonthlyData = {
+    //     labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
+    //     values: [2800, 3200, 2650, 3100, 2900, 3400]
+    // };
 
     const handleAthenaSubmit = () => {
         if (!athenaQuery.trim()) {
@@ -589,7 +640,7 @@ const SpendingInsights = () => {
         }, 2000);
     };
 
-    const handleDateRangeSubmit = () => {
+    const handleDateRangeSubmit = async () => {
         if (!startDate || !endDate) {
             alert('Please select both start and end dates');
             return;
@@ -597,18 +648,30 @@ const SpendingInsights = () => {
 
         setIsLoading(true);
         
-        // Simulate API call delay
-        setTimeout(() => {
+        try {
+            let data;
             if (selectedOption === 'category') {
-                setChartData(sampleCategoryData);
+                data = await apiService.getExpensesByCategory(startDate, endDate);
             } else if (selectedOption === 'merchant') {
-                setChartData(sampleMerchantData);
+                data = await apiService.getExpensesByEntity(startDate, endDate);
             }
+            
+            if (data) {
+                const chartData = {
+                    labels: Object.keys(data.totals),
+                    values: Object.values(data.totals).map(val => Number(val))
+                };
+                setChartData(chartData);
+            }
+        } catch (error) {
+            console.error('Error fetching data:', error);
+            alert('Failed to fetch data. Please try again.');
+        } finally {
             setIsLoading(false);
-        }, 1000);
+        }
     };
 
-    const handleMonthlySubmit = () => {
+    const handleMonthlySubmit = async () => {
         if (!startMonth || !endMonth) {
             alert('Please select both start and end months');
             return;
@@ -616,11 +679,27 @@ const SpendingInsights = () => {
 
         setIsLoading(true);
         
-        // Simulate API call delay
-        setTimeout(() => {
-            setChartData(sampleMonthlyData);
+        try {
+            const data = await apiService.getExpensesByMonth(startMonth, endMonth);
+            
+            if (data) {
+                const chartData = {
+                    labels: Object.keys(data.totals).map(month => {
+                        // Convert "2025-04" to "Apr 2025"
+                        const [year, monthNum] = month.split('-');
+                        const date = new Date(parseInt(year), parseInt(monthNum) - 1);
+                        return date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+                    }),
+                    values: Object.values(data.totals).map(val => Number(val))
+                };
+                setChartData(chartData);
+            }
+        } catch (error) {
+            console.error('Error fetching monthly data:', error);
+            alert('Failed to fetch monthly data. Please try again.');
+        } finally {
             setIsLoading(false);
-        }, 1000);
+        }
     };
 
     const renderOptionContent = () => {
@@ -893,7 +972,7 @@ const SpendingInsights = () => {
 const MonthlyBalanceChecker = () => {
     const [selectedMonth, setSelectedMonth] = useState<string>('');
     const [selectedYear, setSelectedYear] = useState<string>('');
-    const [balanceData, setBalanceData] = useState<any>(null);
+    const [balanceData, setBalanceData] = useState<MonthlyBalanceResponseDto | null>(null);
     const [isLoading, setIsLoading] = useState<boolean>(false);
 
     // Generate month options
@@ -916,7 +995,7 @@ const MonthlyBalanceChecker = () => {
     const currentYear = new Date().getFullYear();
     const years = Array.from({ length: 6 }, (_, i) => currentYear - i);
 
-    const handleCheckBalance = () => {
+    const handleCheckBalance = async () => {
         if (!selectedMonth || !selectedYear) {
             alert('Please select both month and year');
             return;
@@ -924,24 +1003,15 @@ const MonthlyBalanceChecker = () => {
 
         setIsLoading(true);
         
-        // Simulate API call delay
-        setTimeout(() => {
-            // Sample data - replace with actual API call
-            const sampleData = {
-                payments: [
-                    { person: 'Asanka', amount: 1250.00 },
-                    { person: 'John', amount: 800.00 },
-                    { person: 'Sarah', amount: 950.00 }
-                ],
-                debts: [
-                    { debtor: 'Mike', amount: 150.00, creditor: 'Asanka' },
-                    { debtor: 'Lisa', amount: 75.50, creditor: 'John' }
-                ]
-            };
-            
-            setBalanceData(sampleData);
+        try {
+            const data = await apiService.getMonthlyBalance(selectedMonth, selectedYear);
+            setBalanceData(data);
+        } catch (error) {
+            console.error('Error fetching monthly balance:', error);
+            alert('Failed to fetch monthly balance. Please try again.');
+        } finally {
             setIsLoading(false);
-        }, 1000);
+        }
     };
 
     const formatCurrency = (amount: number) => {
@@ -1013,51 +1083,39 @@ const MonthlyBalanceChecker = () => {
             {/* Results Display */}
             {balanceData && (
                 <div className="space-y-6">
-                    {/* Payments Section */}
+                    {/* Summary Section */}
                     <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
-                        <h3 className="text-lg font-semibold text-gray-900 mb-4">Payments Made</h3>
-                        <div className="space-y-3">
-                            {balanceData.payments.map((payment: any, index: number) => (
-                                <div key={index} className="p-4 bg-green-50 border border-green-200 rounded-lg">
-                                    <p className="text-green-800 font-medium">
-                                        {payment.person} has paid {formatCurrency(payment.amount)} in {getMonthName(selectedMonth)}, {selectedYear}
-                                    </p>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-
-                    {/* Debts Section */}
-                    {balanceData.debts.length > 0 && (
-                        <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
-                            <h3 className="text-lg font-semibold text-gray-900 mb-4">Outstanding Debts</h3>
-                            <div className="space-y-3">
-                                {balanceData.debts.map((debt: any, index: number) => (
-                                    <div key={index} className="p-4 bg-red-50 border border-red-200 rounded-lg">
-                                        <p className="text-red-800 font-medium">
-                                            {debt.debtor} owes {formatCurrency(debt.amount)} to {debt.creditor}
-                                        </p>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Summary */}
-                    <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
-                        <h3 className="text-lg font-semibold text-gray-900 mb-4">Summary</h3>
+                        <h3 className="text-lg font-semibold text-gray-900 mb-4">Monthly Balance Summary</h3>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
                                 <p className="text-blue-800 font-medium">
-                                    Total Payments: {formatCurrency(balanceData.payments.reduce((sum: number, payment: any) => sum + payment.amount, 0))}
+                                    Asanka's Total: {formatCurrency(balanceData.asankaTotal)}
                                 </p>
                             </div>
-                            <div className="p-4 bg-orange-50 border border-orange-200 rounded-lg">
-                                <p className="text-orange-800 font-medium">
-                                    Total Outstanding: {formatCurrency(balanceData.debts.reduce((sum: number, debt: any) => sum + debt.amount, 0))}
+                            <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+                                <p className="text-green-800 font-medium">
+                                    Divya's Total: {formatCurrency(balanceData.divyaTotal)}
                                 </p>
                             </div>
                         </div>
+                    </div>
+
+                    {/* Balance Result */}
+                    <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
+                        <h3 className="text-lg font-semibold text-gray-900 mb-4">Balance Result</h3>
+                        {balanceData.whoOwes ? (
+                            <div className="p-4 bg-orange-50 border border-orange-200 rounded-lg">
+                                <p className="text-orange-800 font-medium">
+                                    {balanceData.whoOwes} owes {formatCurrency(balanceData.amount)} to the other person
+                                </p>
+                            </div>
+                        ) : (
+                            <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+                                <p className="text-green-800 font-medium">
+                                    Perfect balance! Both parties have paid equally.
+                                </p>
+                            </div>
+                        )}
                     </div>
                 </div>
             )}
