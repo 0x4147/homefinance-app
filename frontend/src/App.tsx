@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { LayoutDashboard, PlusSquare, List, BarChart2, Calendar, Receipt, Brain } from 'lucide-react';
-import { Chart as ChartJS, ArcElement, Tooltip, Legend, CategoryScale, LinearScale, PointElement, LineElement, Title } from 'chart.js';
-import { Pie, Line } from 'react-chartjs-2';
+import { Chart as ChartJS, ArcElement, Tooltip, Legend, CategoryScale, LinearScale, PointElement, LineElement, Title, BarElement } from 'chart.js';
+import { Pie, Line, Bar } from 'react-chartjs-2';
 import { apiService } from './services/api';
 import type { TransactionDto, MonthlyBalanceResponseDto } from './services/api';
 
 // Register Chart.js components
-ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, PointElement, LineElement, Title);
+ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, PointElement, LineElement, Title, BarElement);
 
 // --- Type Definitions for TypeScript ---
 // This defines the possible views our application can have.
@@ -234,7 +234,7 @@ const Dashboard = () => {
                     data={merchantData} 
                     colors={colors.slice(6, 12)} 
                 />
-                <PieChartCard 
+                <BarChartCard 
                     title="Spending by Month (Past 3 Months)" 
                     data={monthlyData} 
                     colors={colors.slice(0, 3)} 
@@ -623,7 +623,7 @@ const BarChartCard = ({ title, data, colors }: { title: string; data: any; color
         <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">{title}</h3>
             <div className="h-64">
-                <Line data={chartData} options={options} />
+                <Bar data={chartData} options={options} />
             </div>
         </div>
     );
