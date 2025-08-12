@@ -57,7 +57,7 @@ public class TransactionController {
                         tx.getDetails(),
                         tx.getAccount().name(),
                         tx.getTransactionType().name(),
-                        tx.getCategory().getName(),
+                        tx.getCategory() != null ? tx.getCategory().getName() : "Unknown",
                         tx.getPerson().getName()
                 )).collect(Collectors.toList());
         return new ResponseEntity<>(toRet, HttpStatus.OK);
