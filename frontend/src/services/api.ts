@@ -50,6 +50,27 @@ export interface MonthlyBalanceResponseDto {
     divyaTotal: number;
 }
 
+export interface UncategorizedTransaction {
+    id: number;
+    merchant: string;
+    details: string;
+    amount: number;
+    date: string;
+    suggestedCategories: string;
+    confidenceScore: number;
+    createdAt: string;
+    reviewed: boolean;
+    assignedCategory?: string;
+    reviewedAt?: string;
+}
+
+export interface Category {
+    categoryId: number;
+    name: string;
+    type: string;
+    description?: string;
+}
+
 // API service class
 class ApiService {
     private async makeRequest<T>(endpoint: string, options?: RequestInit): Promise<T> {
@@ -185,6 +206,59 @@ class ApiService {
             log.error(`File upload request failed for ${url}:`, error);
             throw error;
         }
+    }
+
+    // Categorization endpoints
+    async getUncategorizedTransactions(): Promise<UncategorizedTransaction[]> {
+        log.info('Fetching uncategorized transactions');
+        return this.makeRequest<UncategorizedTransaction[]>('/categorization/uncategorized');
+    }
+
+    async getAllCategories(): Promise<Category[]> {
+        log.info('Fetching all categories');
+        return this.makeRequest<Category[]>('/categorization/categories');
+    }
+
+    async reviewUncategorizedTransaction(uncategorizedId: number, assignedCategory: string): Promise<string> {
+        log.info(`Reviewing uncategorized transaction ${uncategorizedId} with category ${assignedCategory}`);
+        const params = new URLSearchParams({
+            uncategorizedId: uncategorizedId.toString(),
+            assignedCategory,
+        });
+        return this.makeRequest<string>('/categorization/review', {
+            method: 'POST',
+            body: params.toString(),
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+        });
+    }
+
+    async getCategorizationStats(): Promise<{ totalTransactions: number; categorizedTransactions: number; uncategorizedTransactions: number }> {
+        log.info('Fetching categorization statistics');
+        return this.makeRequest<{ totalTransactions: number; categorizedTransactions: number; uncategorizedTransactions: number }>('/categorization/stats');
+    }
+
+    async getUncategorizedCount(): Promise<{ uncategorizedCount: number }> {
+        log.info('Fetching uncategorized count');
+        return this.makeRequest<{ uncategorizedCount: number }>('/categorization/uncategorized/count');
+    }
+
+    async categorizeTransaction(merchant: string, details: string, amount: string, date: string): Promise<{ merchant: string; category: string | null; confidence: number; autoCategorized: boolean }> {
+        log.info(`Auto-categorizing transaction for merchant: ${merchant}`);
+        const params = new URLSearchParams({
+            merchant,
+            details: details || '',
+            amount,
+            date,
+        });
+        return this.makeRequest<{ merchant: string; category: string | null; confidence: number; autoCategorized: boolean }>('/categorization/categorize', {
+            method: 'POST',
+            body: params.toString(),
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+        });
     }
 }
 

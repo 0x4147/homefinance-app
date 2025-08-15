@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { LayoutDashboard, PlusSquare, List, BarChart2, Calendar, Receipt, Brain } from 'lucide-react';
+import { LayoutDashboard, PlusSquare, List, BarChart2, Calendar, Receipt, Brain, Tag } from 'lucide-react';
 import { Chart as ChartJS, ArcElement, Tooltip, Legend, CategoryScale, LinearScale, PointElement, LineElement, Title, BarElement } from 'chart.js';
-import { Pie, Line, Bar } from 'react-chartjs-2';
+import { Pie, Bar } from 'react-chartjs-2';
 import { apiService } from './services/api';
 import type { TransactionDto, MonthlyBalanceResponseDto } from './services/api';
+import CategorizationReview from './components/CategorizationReview';
 
 // Register Chart.js components
 ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, PointElement, LineElement, Title, BarElement);
@@ -16,7 +17,8 @@ type View =
   | 'ViewTransactions'
   | 'SpendingInsights'
   | 'MonthlyBalanceChecker'
-  | 'AddReceipt';
+  | 'AddReceipt'
+  | 'CategorizationReview';
 
 // --- Welcome Header Component ---
 const WelcomeHeader = () => {
@@ -1188,6 +1190,10 @@ const AddReceipt = () => (
     </div>
 );
 
+const CategorizationReviewView = () => {
+    return <CategorizationReview />;
+};
+
 // --- Sidebar Navigation Component ---
 interface SidebarProps {
     activeView: View;
@@ -1202,6 +1208,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeView, setActiveView }) => {
         { id: 4, name: 'SpendingInsights', icon: BarChart2 },
         { id: 5, name: 'MonthlyBalanceChecker', icon: Calendar },
         { id: 6, name: 'AddReceipt', icon: Receipt },
+        { id: 7, name: 'CategorizationReview', icon: Tag },
     ];
 
     // Function to format the view name for display
@@ -1260,6 +1267,8 @@ const App: React.FC = () => {
                 return <MonthlyBalanceChecker />;
             case 'AddReceipt':
                 return <AddReceipt />;
+            case 'CategorizationReview':
+                return <CategorizationReviewView />;
             default:
                 return <Dashboard />;
         }
