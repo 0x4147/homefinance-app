@@ -74,7 +74,7 @@ public class TransactionCategorizationService {
         MatchedCategory matchedCategory = tryFuzzyKeywordMatching(merchant, details);
         if (matchedCategory != null && matchedCategory.getCategoryName() != null) {
             log.debug("Fuzzy match found for merchant: {}", merchant);
-            return category;
+            return categoryRepository.findByName(matchedCategory.getCategoryName());
         }
 
         // 3. Try machine learning based on historical patterns

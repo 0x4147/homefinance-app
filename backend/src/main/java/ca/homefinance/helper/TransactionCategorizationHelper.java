@@ -13,17 +13,17 @@ public final class TransactionCategorizationHelper {
 
     public static  String normalize(String s) {
         if (s == null) return "";
-        String t = s.toUpperCase(Locale.ROOT);
+        String t = s.toLowerCase(Locale.ROOT);
 
         // remove common trailing location like "HAMILTON, ON"
-        t = t.replaceAll("\\b[A-Z]+(?:\\s+[A-Z]+)*,\\s*[A-Z]{2}\\b", " ");
+        t = t.replaceAll("\\b[a-z]+(?:\\s+[a-z]+)*,\\s*[a-z]{2}\\b", " ");
 
         // drop store numbers like W1105 or #1234
-        t = t.replaceAll("\\bW\\d{3,}\\b", " ");
+        t = t.replaceAll("\\bw\\d{3,}\\b", " ");
         t = t.replaceAll("#\\d{2,}", " ");
 
         // keep only letters/numbers/spaces
-        t = t.replaceAll("[^A-Z0-9 ]", " ");
+        t = t.replaceAll("[^a-z0-9 ]", " ");
 
         // squeeze spaces
         t = t.replaceAll("\\s+", " ").trim();
