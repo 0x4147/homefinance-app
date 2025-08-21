@@ -1,5 +1,6 @@
 package ca.homefinance.service;
 
+import ca.homefinance.dto.MatchedCategory;
 import ca.homefinance.entity.Category;
 import ca.homefinance.entity.Transaction;
 import ca.homefinance.repository.CategoryRepository;
@@ -8,6 +9,7 @@ import ca.homefinance.repository.UncategorizedTransactionRepository;
 import ca.homefinance.entity.UncategorizedTransaction;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.core.type.TypeReference;
+import org.apache.commons.text.similarity.JaroWinklerSimilarity;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.slf4j.Logger;
@@ -19,6 +21,8 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.*;
 import java.util.stream.Collectors;
+
+import static ca.homefinance.helper.TransactionCategorizationHelper.*;
 
 @Service
 public class TransactionCategorizationService {
@@ -51,7 +55,6 @@ public class TransactionCategorizationService {
     
     private void initializeCategorizationSystem() {
         loadStaticMappings();
-        loadCategoryKeywords();
         analyzeHistoricalData();
     }
     
@@ -59,35 +62,29 @@ public class TransactionCategorizationService {
      * Main categorization method that combines multiple approaches
      */
     public Category categorizeTransaction(String merchant, String details, BigDecimal amount, LocalDate date) {
+
         // 1. Try exact merchant mapping first
         Category category = tryExactMerchantMapping(merchant);
         if (category != null) {
             log.debug("Exact match found for merchant: {}", merchant);
             return category;
         }
-        
+
         // 2. Try fuzzy matching with keywords
-        category = tryFuzzyKeywordMatching(merchant, details);
-        if (category != null) {
+        MatchedCategory matchedCategory = tryFuzzyKeywordMatching(merchant, details);
+        if (matchedCategory != null && matchedCategory.getCategoryName() != null) {
             log.debug("Fuzzy match found for merchant: {}", merchant);
             return category;
         }
-        
+
         // 3. Try machine learning based on historical patterns
         category = tryMLBasedCategorization(merchant, amount, date);
         if (category != null) {
             log.debug("ML-based categorization for merchant: {}", merchant);
             return category;
         }
-        
-        // 4. Try amount-based heuristics
-        category = tryAmountBasedCategorization(amount, merchant);
-        if (category != null) {
-            log.debug("Amount-based categorization for merchant: {}", merchant);
-            return category;
-        }
-        
-        // 5. Flag for user review if no match found
+
+        // 4. Flag for user review if no match found
         flagForUserReview(merchant, details, amount, date);
         
         return null; // Return null to indicate no automatic categorization
@@ -107,36 +104,30 @@ public class TransactionCategorizationService {
     /**
      * Fuzzy keyword matching with confidence scoring
      */
-    private Category tryFuzzyKeywordMatching(String merchant, String details) {
-        String searchText = (merchant + " " + (details != null ? details : "")).toLowerCase();
-        Map<String, Double> categoryScores = new HashMap<>();
-        
-        for (Map.Entry<String, List<String>> entry : categoryKeywords.entrySet()) {
-            String categoryName = entry.getKey();
-            List<String> keywords = entry.getValue();
-            
-            double score = 0.0;
-            for (String keyword : keywords) {
-                if (searchText.contains(keyword.toLowerCase())) {
-                    score += 1.0;
-                    // Bonus for exact word matches
-                    if (searchText.matches(".*\\b" + keyword.toLowerCase() + "\\b.*")) {
-                        score += 0.5;
-                    }
-                }
-            }
-            
-            if (score > 0) {
-                categoryScores.put(categoryName, score);
+    private MatchedCategory tryFuzzyKeywordMatching(String merchant, String details) {
+        double weakThreshold = 0.80;
+
+        String merchantNormalized = normalize((merchant == null ? "" : merchant) + " " + (details == null ? "" : details));
+
+        // Evaluate best candidate
+        double bestScore = 0.0;
+        String bestKey = null;
+        String bestCategory = null;
+
+        for (Map.Entry<String, String> entry : merchantToCategory.entrySet()) {
+            String candidate = entry.getKey();
+            double score = similarityScore(merchantNormalized, candidate);
+            if (score > bestScore) {
+                bestScore = score;
+                bestKey = candidate;
+                bestCategory = entry.getValue();
             }
         }
-        
-        // Return category with highest score if above threshold
-        return categoryScores.entrySet().stream()
-                .max(Map.Entry.comparingByValue())
-                .filter(entry -> entry.getValue() >= 1.0) // Minimum threshold
-                .map(entry -> categoryRepository.findByName(entry.getKey()))
-                .orElse(null);
+
+        if (bestScore >= weakThreshold) {
+            return new MatchedCategory(bestKey, bestCategory, round2(bestScore));
+        }
+        return null;
     }
     
     /**
@@ -156,43 +147,6 @@ public class TransactionCategorizationService {
                 return categoryRepository.findByName(mostFrequentCategory);
             }
         }
-        
-        // Try amount-based pattern matching
-        return tryAmountBasedCategorization(amount, merchant);
-    }
-    
-    /**
-     * Amount-based categorization using heuristics
-     */
-    private Category tryAmountBasedCategorization(BigDecimal amount, String merchant) {
-        double amountValue = amount.doubleValue();
-        
-        // Groceries: typically $20-$200
-        if (amountValue >= 20 && amountValue <= 200 && 
-            (merchant.toLowerCase().contains("supermarket") || 
-             merchant.toLowerCase().contains("grocery") ||
-             merchant.toLowerCase().contains("food"))) {
-            return categoryRepository.findByName("Groceries");
-        }
-        
-        // Take Out: typically $10-$50
-        if (amountValue >= 10 && amountValue <= 50 && 
-            (merchant.toLowerCase().contains("restaurant") || 
-             merchant.toLowerCase().contains("cafe") ||
-             merchant.toLowerCase().contains("pizza") ||
-             merchant.toLowerCase().contains("burger"))) {
-            return categoryRepository.findByName("Take Out");
-        }
-        
-        // Gas/Transportation: typically $40-$100
-        if (amountValue >= 40 && amountValue <= 100 && 
-            (merchant.toLowerCase().contains("gas") || 
-             merchant.toLowerCase().contains("esso") ||
-             merchant.toLowerCase().contains("shell") ||
-             merchant.toLowerCase().contains("petro"))) {
-            return categoryRepository.findByName("Transportation");
-        }
-        
         return null;
     }
     
@@ -258,50 +212,7 @@ public class TransactionCategorizationService {
             log.error("Failed to load static mappings", e);
         }
     }
-    
-    /**
-     * Load category keywords for fuzzy matching
-     */
-    private void loadCategoryKeywords() {
-        categoryKeywords.put("Groceries", Arrays.asList(
-            "supermarket", "grocery", "food basics", "sobeys", "freshco", "no frills", 
-            "costco", "walmart", "food", "market", "produce"
-        ));
-        
-        categoryKeywords.put("Take Out", Arrays.asList(
-            "restaurant", "cafe", "pizza", "burger", "mcdonalds", "tim hortons", 
-            "starbucks", "subway", "kfc", "wendys", "dairy queen", "shawarma"
-        ));
-        
-        categoryKeywords.put("Transportation", Arrays.asList(
-            "gas", "esso", "shell", "petro", "pioneer", "parking", "uber", "lyft", 
-            "taxi", "transit", "bus", "train", "subway"
-        ));
-        
-        categoryKeywords.put("Healthcare", Arrays.asList(
-            "pharmacy", "drug", "medical", "doctor", "hospital", "clinic", 
-            "dental", "optical", "prescription", "health"
-        ));
-        
-        categoryKeywords.put("Home maintenance", Arrays.asList(
-            "home depot", "canadian tire", "ikea", "hardware", "tools", 
-            "furniture", "appliance", "repair", "maintenance"
-        ));
-        
-        categoryKeywords.put("Entertainment", Arrays.asList(
-            "movie", "theatre", "cinema", "concert", "show", "game", "sport", 
-            "lcbo", "beer", "wine", "liquor", "bar", "pub"
-        ));
-        
-        categoryKeywords.put("Amazon", Arrays.asList(
-            "amazon", "amzn"
-        ));
-        
-        categoryKeywords.put("Temu", Arrays.asList(
-            "temu"
-        ));
-    }
-    
+
     /**
      * Flag transaction for user review
      */
