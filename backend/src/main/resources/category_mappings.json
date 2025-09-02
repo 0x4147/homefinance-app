@@ -12,7 +12,8 @@
     "SOBEYS",
     "SWADESH",
     "WALMART",
-    "DESI MANDI"
+    "DESI MANDI",
+    "FRESHII"
   ],
   "Take Out": [
     "KARDAMOM KITCHEN",
@@ -35,7 +36,9 @@
     "THAI EXPRESS",
     "SCADDABUSH",
     "STARBUCKS",
-    "SUBWAY"
+    "SUBWAY",
+    "PIZZA",
+    "BURRITO"
   ],
   "Car repair": [
     "MIDAS"
@@ -44,7 +47,8 @@
     "PARKING",
     "HONK",
     "ESSO",
-    "PIONEER"
+    "PIONEER",
+    "UBER"
   ],
   "Healthcare": [
     "PEOPLES PHARMACHOICE",

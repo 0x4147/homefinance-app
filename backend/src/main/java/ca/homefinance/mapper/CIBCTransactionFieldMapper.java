@@ -74,6 +74,10 @@ public class CIBCTransactionFieldMapper implements FieldSetMapper<Transaction> {
             
 //            Category category = categorizer.getCategory(transaction.getEntity()); //PREVIOUS CATEGORIZER - CAN DELETE LATER
             Category category = transactionCategorizationService.categorizeTransaction(transaction.getEntity(), null, transaction.getAmount(), transaction.getDate());
+            if (category.getCategoryId() == null && category.getUncategorizedTransaction() != null){
+                transaction.setUncategorizedTransaction(category.getUncategorizedTransaction());
+                category = null;
+            }
 
             logger.debug("Categorized entity '{}' as: {}", transaction.getEntity(), category != null ? category.getName() : "null");
             transaction.setCategory(category);

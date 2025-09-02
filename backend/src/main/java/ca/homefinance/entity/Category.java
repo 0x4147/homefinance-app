@@ -34,6 +34,9 @@ public class Category {
     @Column(name = "created_at", columnDefinition = "TIMESTAMP DEFAULT CURRENT_TIMESTAMP", updatable = false)
     private LocalDateTime createdAt = LocalDateTime.now();
 
+    @Transient
+    private UncategorizedTransaction uncategorizedTransaction;
+
     public enum CategoryType {
         INCOME, EXPENSE
     }

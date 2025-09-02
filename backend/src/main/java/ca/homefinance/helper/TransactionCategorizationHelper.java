@@ -16,7 +16,7 @@ public final class TransactionCategorizationHelper {
         String t = s.toLowerCase(Locale.ROOT);
 
         // remove common trailing location like "HAMILTON, ON"
-        t = t.replaceAll("\\b[a-z]+(?:\\s+[a-z]+)*,\\s*[a-z]{2}\\b", " ");
+        t = t.replaceAll("\\s+[a-z]+(?:\\s+[a-z]+)*,\\s*[a-z]{2}$", "");
 
         // drop store numbers like W1105 or #1234
         t = t.replaceAll("\\bw\\d{3,}\\b", " ");

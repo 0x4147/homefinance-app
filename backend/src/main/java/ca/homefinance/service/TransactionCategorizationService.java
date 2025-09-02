@@ -71,7 +71,7 @@ public class TransactionCategorizationService {
         }
 
         // 2. Try fuzzy matching with keywords
-        MatchedCategory matchedCategory = tryFuzzyKeywordMatching(merchant, details);
+        MatchedCategory matchedCategory = tryFuzzyKeywordMatching(merchant, details, true);
         if (matchedCategory != null && matchedCategory.getCategoryName() != null) {
             log.debug("Fuzzy match found for merchant: {}", merchant);
             return categoryRepository.findByName(matchedCategory.getCategoryName());
@@ -85,11 +85,29 @@ public class TransactionCategorizationService {
         }
 
         // 4. Flag for user review if no match found
-        flagForUserReview(merchant, details, amount, date);
-        
-        return null; // Return null to indicate no automatic categorization
+        UncategorizedTransaction uncategorizedTransaction = flagForUserReview(merchant, details, amount, date);
+        Category Category = new Category();
+        Category.setUncategorizedTransaction(uncategorizedTransaction);
+
+        return Category;
     }
-    
+
+    public void updateTransactionCategory (Integer transactionId, String newCategory){
+        Transaction transaction = transactionRepository.findById(transactionId)
+                .orElseThrow(() -> new RuntimeException("Transaction not found"));
+
+        Category category = categoryRepository.findByName(newCategory);
+        if (category == null) {
+            throw new RuntimeException("Category not found: " + newCategory);
+        }
+
+        // Update the transaction
+        transaction.setCategory(category);
+        transactionRepository.save(transaction);
+
+        // Learn from this correction
+        learnFromUserCorrection(transaction.getEntity(), newCategory);
+    }
     /**
      * Exact merchant mapping from static JSON
      */
@@ -104,7 +122,7 @@ public class TransactionCategorizationService {
     /**
      * Fuzzy keyword matching with confidence scoring
      */
-    private MatchedCategory tryFuzzyKeywordMatching(String merchant, String details) {
+    private MatchedCategory tryFuzzyKeywordMatching(String merchant, String details, boolean returnOnlyIfConfident) {
         double weakThreshold = 0.80;
 
         String merchantNormalized = normalize((merchant == null ? "" : merchant) + " " + (details == null ? "" : details));
@@ -124,10 +142,13 @@ public class TransactionCategorizationService {
             }
         }
 
-        if (bestScore >= weakThreshold) {
-            return new MatchedCategory(bestKey, bestCategory, round2(bestScore));
+        if (returnOnlyIfConfident){
+            if(bestScore >= weakThreshold){
+                return new MatchedCategory(bestKey, bestCategory, round2(bestScore));
+            }
+            else return null;
         }
-        return null;
+        return new MatchedCategory(bestKey, bestCategory, round2(bestScore));
     }
     
     /**
@@ -181,9 +202,7 @@ public class TransactionCategorizationService {
                 // Build merchant-category history
                 merchantCategoryHistory.computeIfAbsent(merchant, k -> new HashMap<>())
                         .merge(category, 1, Integer::sum);
-                
-                // Build amount patterns
-                categoryAmountPatterns.merge(category, transaction.getAmount(), BigDecimal::add);
+
             }
         }
         
@@ -216,7 +235,7 @@ public class TransactionCategorizationService {
     /**
      * Flag transaction for user review
      */
-    private void flagForUserReview(String merchant, String details, BigDecimal amount, LocalDate date) {
+    private UncategorizedTransaction flagForUserReview(String merchant, String details, BigDecimal amount, LocalDate date) {
         try {
             // Get suggested categories
             List<String> suggestions = getSuggestedCategories(merchant, details);
@@ -234,13 +253,14 @@ public class TransactionCategorizationService {
             uncategorized.setSuggestedCategories(suggestedCategoriesJson);
             uncategorized.setConfidenceScore(confidence);
             uncategorized.setReviewed(false);
-            
-            uncategorizedTransactionRepository.save(uncategorized);
-            
+
             log.info("Transaction flagged for review: {} - {} - ${}", merchant, details, amount);
+            return uncategorizedTransactionRepository.save(uncategorized);
+
         } catch (Exception e) {
             log.error("Failed to save uncategorized transaction for review", e);
         }
+        return null;
     }
     
     /**
@@ -294,21 +314,11 @@ public class TransactionCategorizationService {
      */
     public List<String> getSuggestedCategories(String merchant, String details) {
         Set<String> suggestions = new HashSet<>();
-        
-        // Add categories from fuzzy matching
-        String searchText = (merchant + " " + (details != null ? details : "")).toLowerCase();
-        for (Map.Entry<String, List<String>> entry : categoryKeywords.entrySet()) {
-            String categoryName = entry.getKey();
-            List<String> keywords = entry.getValue();
-            
-            for (String keyword : keywords) {
-                if (searchText.contains(keyword.toLowerCase())) {
-                    suggestions.add(categoryName);
-                    break;
-                }
-            }
-        }
-        
+
+        MatchedCategory matchedCategory = tryFuzzyKeywordMatching(merchant, details, false);
+
+        suggestions.add(matchedCategory.getCategoryName());
+
         // Add categories from historical data
         Map<String, Integer> categoryCounts = merchantCategoryHistory.get(merchant.toLowerCase());
         if (categoryCounts != null) {

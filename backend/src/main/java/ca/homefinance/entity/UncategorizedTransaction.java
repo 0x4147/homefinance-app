@@ -14,7 +14,7 @@ import java.time.LocalDateTime;
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-@Table(name = "UncategorizedTransaction")
+@Table(name = "uncategorized_transaction")
 public class UncategorizedTransaction {
 
     @Id

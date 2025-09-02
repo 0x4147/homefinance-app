@@ -86,23 +86,25 @@ public class CategorizationController {
      */
     @PutMapping("/updateTransactionCategory")
     public ResponseEntity<String> updateTransactionCategory(
-            @RequestParam Long transactionId,
+            @RequestParam Integer transactionId,
             @RequestParam String newCategory) {
         
-        Transaction transaction = transactionRepository.findById(transactionId.intValue())
-                .orElseThrow(() -> new RuntimeException("Transaction not found"));
-        
-        Category category = categoryRepository.findByName(newCategory);
-        if (category == null) {
-            throw new RuntimeException("Category not found: " + newCategory);
-        }
-        
-        // Update the transaction
-        transaction.setCategory(category);
-        transactionRepository.save(transaction);
-        
-        // Learn from this correction
-        categorizationService.learnFromUserCorrection(transaction.getEntity(), newCategory);
+//        Transaction transaction = transactionRepository.findById(transactionId.intValue())
+//                .orElseThrow(() -> new RuntimeException("Transaction not found"));
+//
+//        Category category = categoryRepository.findByName(newCategory);
+//        if (category == null) {
+//            throw new RuntimeException("Category not found: " + newCategory);
+//        }
+//
+//        // Update the transaction
+//        transaction.setCategory(category);
+//        transactionRepository.save(transaction);
+//
+//        // Learn from this correction
+//        categorizationService.learnFromUserCorrection(transaction.getEntity(), newCategory);
+
+        categorizationService.updateTransactionCategory(transactionId, newCategory);
         
         return new ResponseEntity<>("Transaction category updated and learning applied", HttpStatus.OK);
     }
@@ -165,7 +167,13 @@ public class CategorizationController {
         uncategorized.setAssignedCategory(assignedCategory);
         uncategorized.setReviewedAt(java.time.LocalDateTime.now());
         uncategorizedTransactionRepository.save(uncategorized);
-        
+
+        List<Transaction> linkedMainTransaction = transactionRepository.findByUncategorizedTransaction_Id(uncategorizedId);
+
+        if (!linkedMainTransaction.isEmpty()){
+            categorizationService.updateTransactionCategory((linkedMainTransaction.get(0).getTransactionId()), assignedCategory);
+        }
+
         // Learn from this correction
         categorizationService.learnFromUserCorrection(uncategorized.getMerchant(), assignedCategory);
         

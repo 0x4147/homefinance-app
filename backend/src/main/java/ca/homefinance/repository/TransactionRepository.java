@@ -17,6 +17,7 @@ public interface TransactionRepository extends JpaRepository<Transaction, Intege
 
     List<Transaction> findByDateBetween(LocalDate startDate, LocalDate endDate);
 
+    List<Transaction> findByUncategorizedTransaction_Id(Integer id);
 //    List<Transaction> findByAmount(BigDecimal amount);
 //
 //    List<Transaction> findByDate(Date date);

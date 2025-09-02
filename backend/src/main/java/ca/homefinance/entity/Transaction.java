@@ -46,6 +46,10 @@ public class Transaction {
     @JoinColumn(name = "category_id", referencedColumnName = "category_id")
     private Category category;
 
+    @OneToOne
+    @JoinColumn(name = "uncategorized_transaction_id", referencedColumnName = "id")
+    private UncategorizedTransaction uncategorizedTransaction;
+
     @ManyToOne
     @JoinColumn(name = "person_id", referencedColumnName = "person_id")
     private Person person;
