@@ -3,7 +3,7 @@ import { LayoutDashboard, PlusSquare, List, BarChart2, Calendar, Receipt, Brain,
 import { Chart as ChartJS, ArcElement, Tooltip, Legend, CategoryScale, LinearScale, PointElement, LineElement, Title, BarElement } from 'chart.js';
 import { Pie, Bar } from 'react-chartjs-2';
 import { apiService } from './services/api';
-import type { TransactionDto, MonthlyBalanceResponseDto } from './services/api';
+import type { TransactionDto, MonthlyBalanceResponseDto, TransactionSummary, Transaction } from './services/api';
 import CategorizationReview from './components/CategorizationReview';
 
 // Register Chart.js components
@@ -97,8 +97,95 @@ const AthenaSummary = () => {
     );
 };
 
+// --- Transactions Modal ---
+const TransactionsModal = ({
+    title,
+    open,
+    onClose,
+    transactions
+}: {
+    title: string;
+    open: boolean;
+    onClose: () => void;
+    transactions: (TransactionDto | Transaction)[];
+}) => {
+    if (!open) return null;
+
+    const formatCurrency = (amount: number) => {
+        return new Intl.NumberFormat('en-CA', {
+            style: 'currency',
+            currency: 'CAD'
+        }).format(Math.abs(amount));
+    };
+
+    const formatDate = (dateString: string) => {
+        return new Date(dateString).toLocaleDateString('en-CA', {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric'
+        });
+    };
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+            <div className="w-full max-w-3xl bg-white rounded-xl shadow-xl">
+                <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+                    <h3 className="text-lg font-semibold text-gray-900">{title}</h3>
+                    <button onClick={onClose} className="text-gray-500 hover:text-gray-700">✕</button>
+                </div>
+                <div className="p-4 max-h-[70vh] overflow-auto">
+                    {transactions.length === 0 ? (
+                        <div className="text-center text-gray-500 py-8">No transactions to display</div>
+                    ) : (
+                        <div className="overflow-x-auto">
+                            <table className="min-w-full divide-y divide-gray-200">
+                                <thead className="bg-gray-50">
+                                    <tr>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Entity</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Details</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Amount</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Account</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Category</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="bg-white divide-y divide-gray-200">
+                                    {transactions.map((t, idx) => {
+                                        const tx: any = t as any;
+                                        const entity = tx.entity || tx.merchant || tx.payee || '';
+                                        const category = typeof tx.category === 'string' ? tx.category : (tx.category?.name || '');
+                                        const amountNum = Number(tx.amount || 0);
+                                        const account = tx.account || tx.sourceAccount || '';
+                                        const details = tx.details || '';
+                                        const dateStr = typeof tx.date === 'string' ? tx.date : (tx.date?.toString?.() || '');
+                                        return (
+                                            <tr key={idx} className="hover:bg-gray-50">
+                                                <td className="px-6 py-3 whitespace-nowrap text-sm text-gray-900">{formatDate(dateStr)}</td>
+                                                <td className="px-6 py-3 whitespace-nowrap text-sm text-gray-900">{entity}</td>
+                                                <td className="px-6 py-3 whitespace-nowrap text-sm text-gray-500">{details}</td>
+                                                <td className={`px-6 py-3 whitespace-nowrap text-sm font-medium ${amountNum >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                                    {amountNum >= 0 ? '+' : '-'}{formatCurrency(amountNum)}
+                                                </td>
+                                                <td className="px-6 py-3 whitespace-nowrap text-sm text-gray-900">{account}</td>
+                                                <td className="px-6 py-3 whitespace-nowrap text-sm text-gray-900">{category}</td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
+                </div>
+                <div className="px-6 py-3 border-t border-gray-200 flex justify-end">
+                    <button onClick={onClose} className="px-4 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50">Close</button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
 // --- Pie Chart Component ---
-const PieChartCard = ({ title, data, colors }: { title: string; data: any; colors: string[] }) => {
+const PieChartCard = ({ title, data, colors, onSliceClick }: { title: string; data: any; colors: string[]; onSliceClick?: (label: string, index: number) => void }) => {
     const chartData = {
         labels: data.labels,
         datasets: [
@@ -111,8 +198,14 @@ const PieChartCard = ({ title, data, colors }: { title: string; data: any; color
         ],
     };
 
-    const options = {
+    const options: any = {
         responsive: true,
+        onClick: (_evt: any, elements: any[], chart: any) => {
+            if (!onSliceClick || !elements || elements.length === 0) return;
+            const idx = elements[0].index;
+            const label = chart.data.labels[idx];
+            onSliceClick(label, idx);
+        },
         plugins: {
             legend: {
                 position: 'bottom' as const,
@@ -147,10 +240,13 @@ const PieChartCard = ({ title, data, colors }: { title: string; data: any; color
 
 // --- Dashboard Component ---
 const Dashboard = () => {
-    const [categoryData, setCategoryData] = useState<{ labels: string[]; values: number[] }>({ labels: [], values: [] });
-    const [merchantData, setMerchantData] = useState<{ labels: string[]; values: number[] }>({ labels: [], values: [] });
-    const [monthlyData, setMonthlyData] = useState<{ labels: string[]; values: number[] }>({ labels: [], values: [] });
+    const [categoryData, setCategoryData] = useState<{ labels: string[]; values: number[]; details?: Record<string, (TransactionDto | Transaction)[]> }>({ labels: [], values: [] });
+    const [merchantData, setMerchantData] = useState<{ labels: string[]; values: number[]; details?: Record<string, (TransactionDto | Transaction)[]> }>({ labels: [], values: [] });
+    const [monthlyData, setMonthlyData] = useState<{ labels: string[]; values: number[]; details?: Record<string, (TransactionDto | Transaction)[]>; originalKeys?: string[] }>({ labels: [], values: [] });
     const [isLoading, setIsLoading] = useState(true);
+    const [modalOpen, setModalOpen] = useState(false);
+    const [modalTitle, setModalTitle] = useState('');
+    const [modalTransactions, setModalTransactions] = useState<(TransactionDto | Transaction)[]>([]);
 
     const colors = [
         '#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#06B6D4',
@@ -171,7 +267,8 @@ const Dashboard = () => {
                 if (categoryResponse) {
                     setCategoryData({
                         labels: Object.keys(categoryResponse.totals),
-                        values: Object.values(categoryResponse.totals).map(val => Number(val))
+                        values: Object.values(categoryResponse.totals).map(val => Number(val)),
+                        details: categoryResponse.details
                     });
                 }
 
@@ -180,7 +277,8 @@ const Dashboard = () => {
                 if (merchantResponse) {
                     setMerchantData({
                         labels: Object.keys(merchantResponse.totals),
-                        values: Object.values(merchantResponse.totals).map(val => Number(val))
+                        values: Object.values(merchantResponse.totals).map(val => Number(val)),
+                        details: merchantResponse.details
                     });
                 }
 
@@ -189,13 +287,16 @@ const Dashboard = () => {
                 const endMonth = now.toISOString().slice(0, 7);
                 const monthlyResponse = await apiService.getExpensesByMonth(startMonth, endMonth);
                 if (monthlyResponse) {
+                    const keys = Object.keys(monthlyResponse.totals);
                     setMonthlyData({
-                        labels: Object.keys(monthlyResponse.totals).map(month => {
+                        labels: keys.map(month => {
                             const [year, monthNum] = month.split('-');
                             const date = new Date(parseInt(year), parseInt(monthNum) - 1);
                             return date.toLocaleDateString('en-US', { month: 'long' });
                         }),
-                        values: Object.values(monthlyResponse.totals).map(val => Number(val))
+                        values: Object.values(monthlyResponse.totals).map(val => Number(val)),
+                        details: monthlyResponse.details,
+                        originalKeys: keys
                     });
                 }
             } catch (error) {
@@ -220,6 +321,12 @@ const Dashboard = () => {
         );
     }
 
+    const openTransactions = (title: string, txs: (TransactionDto | Transaction)[] | undefined) => {
+        setModalTitle(title);
+        setModalTransactions(txs || []);
+        setModalOpen(true);
+    };
+
     return (
         <div className="max-w-7xl mx-auto animate-fade-in">
             <WelcomeHeader />
@@ -230,18 +337,31 @@ const Dashboard = () => {
                     title="Spending by Category (Past 3 Months)" 
                     data={categoryData} 
                     colors={colors.slice(0, 6)} 
+                    onSliceClick={(label) => openTransactions(`Transactions in ${label}`, categoryData.details?.[label])}
                 />
                 <PieChartCard 
                     title="Spending by Merchant (Past 3 Months)" 
                     data={merchantData} 
                     colors={colors.slice(6, 12)} 
+                    onSliceClick={(label) => openTransactions(`Transactions at ${label}`, merchantData.details?.[label])}
                 />
                 <BarChartCard 
                     title="Spending by Month (Past 3 Months)" 
                     data={monthlyData} 
                     colors={colors.slice(0, 3)} 
+                    onBarClick={(index) => {
+                        const key = monthlyData.originalKeys?.[index] || '';
+                        openTransactions(`Transactions in ${monthlyData.labels[index]}`, monthlyData.details?.[key]);
+                    }}
                 />
             </div>
+
+            <TransactionsModal
+                title={modalTitle}
+                open={modalOpen}
+                onClose={() => setModalOpen(false)}
+                transactions={modalTransactions}
+            />
         </div>
     );
 };
@@ -581,7 +701,7 @@ const ViewTransactions = () => {
 };
 
 // Bar Chart Component for monthly spending
-const BarChartCard = ({ title, data, colors }: { title: string; data: any; colors: string[] }) => {
+const BarChartCard = ({ title, data, colors, onBarClick }: { title: string; data: any; colors: string[]; onBarClick?: (index: number) => void }) => {
     const chartData = {
         labels: data.labels,
         datasets: [
@@ -595,8 +715,13 @@ const BarChartCard = ({ title, data, colors }: { title: string; data: any; color
         ],
     };
 
-    const options = {
+    const options: any = {
         responsive: true,
+        onClick: (_evt: any, elements: any[]) => {
+            if (!onBarClick || !elements || elements.length === 0) return;
+            const idx = elements[0].index;
+            onBarClick(idx);
+        },
         plugins: {
             legend: {
                 display: false,
@@ -641,6 +766,11 @@ const SpendingInsights = () => {
     const [startMonth, setStartMonth] = useState<string>('');
     const [endMonth, setEndMonth] = useState<string>('');
     const [chartData, setChartData] = useState<any>(null);
+    const [detailsMap, setDetailsMap] = useState<Record<string, (TransactionDto | Transaction)[]> | null>(null);
+    const [originalKeys, setOriginalKeys] = useState<string[] | null>(null);
+    const [modalOpen, setModalOpen] = useState(false);
+    const [modalTitle, setModalTitle] = useState('');
+    const [modalTransactions, setModalTransactions] = useState<(TransactionDto | Transaction)[]>([]);
     const [isLoading, setIsLoading] = useState<boolean>(false);
 
     const colors = [
@@ -688,7 +818,7 @@ const SpendingInsights = () => {
         setIsLoading(true);
         
         try {
-            let data;
+            let data: TransactionSummary | undefined;
             if (selectedOption === 'category') {
                 data = await apiService.getExpensesByCategory(startDate, endDate);
             } else if (selectedOption === 'merchant') {
@@ -701,6 +831,8 @@ const SpendingInsights = () => {
                     values: Object.values(data.totals).map(val => Number(val))
                 };
                 setChartData(chartData);
+                setDetailsMap(data.details);
+                setOriginalKeys(null);
             }
         } catch (error) {
             console.error('Error fetching data:', error);
@@ -722,8 +854,9 @@ const SpendingInsights = () => {
             const data = await apiService.getExpensesByMonth(startMonth, endMonth);
             
             if (data) {
+                const keys = Object.keys(data.totals);
                 const chartData = {
-                    labels: Object.keys(data.totals).map(month => {
+                    labels: keys.map(month => {
                         // Convert "2025-04" to "Apr 2025"
                         const [year, monthNum] = month.split('-');
                         const date = new Date(parseInt(year), parseInt(monthNum) - 1);
@@ -732,6 +865,8 @@ const SpendingInsights = () => {
                     values: Object.values(data.totals).map(val => Number(val))
                 };
                 setChartData(chartData);
+                setDetailsMap(data.details);
+                setOriginalKeys(keys);
             }
         } catch (error) {
             console.error('Error fetching monthly data:', error);
@@ -819,6 +954,12 @@ const SpendingInsights = () => {
                                         title="Spending by Category" 
                                         data={chartData} 
                                         colors={colors.slice(0, 6)} 
+                                        onSliceClick={(label) => {
+                                            const txs = detailsMap?.[label] || [];
+                                            setModalTitle(`Transactions in ${label}`);
+                                            setModalTransactions(txs);
+                                            setModalOpen(true);
+                                        }}
                                     />
                                 </div>
                             )}
@@ -868,6 +1009,12 @@ const SpendingInsights = () => {
                                         title="Top Merchants" 
                                         data={chartData} 
                                         colors={colors.slice(6, 12)} 
+                                        onSliceClick={(label) => {
+                                            const txs = detailsMap?.[label] || [];
+                                            setModalTitle(`Transactions at ${label}`);
+                                            setModalTransactions(txs);
+                                            setModalOpen(true);
+                                        }}
                                     />
                                 </div>
                             )}
@@ -917,6 +1064,13 @@ const SpendingInsights = () => {
                                         title="Monthly Spending" 
                                         data={chartData} 
                                         colors={colors.slice(0, 6)} 
+                                        onBarClick={(index) => {
+                                            const key = originalKeys?.[index] || '';
+                                            const txs = (key && detailsMap) ? (detailsMap[key] || []) : [];
+                                            setModalTitle(`Transactions in ${chartData.labels[index]}`);
+                                            setModalTransactions(txs);
+                                            setModalOpen(true);
+                                        }}
                                     />
                                 </div>
                             )}
@@ -1004,6 +1158,12 @@ const SpendingInsights = () => {
 
             {/* Content Area */}
             {renderOptionContent()}
+            <TransactionsModal
+                title={modalTitle}
+                open={modalOpen}
+                onClose={() => setModalOpen(false)}
+                transactions={modalTransactions}
+            />
         </div>
     );
 };
