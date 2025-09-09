@@ -148,6 +148,8 @@ public class TransactionCategorizationService {
             }
             else return null;
         }
+
+        log.debug("Fuzzy keyword matching: {} -> {}", merchantNormalized, bestKey);
         return new MatchedCategory(bestKey, bestCategory, round2(bestScore));
     }
     

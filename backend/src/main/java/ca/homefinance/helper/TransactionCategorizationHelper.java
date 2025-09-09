@@ -11,22 +11,23 @@ public final class TransactionCategorizationHelper {
 
     private TransactionCategorizationHelper() {}
 
-    public static  String normalize(String s) {
+    public static String normalize(String s) {
         if (s == null) return "";
         String t = s.toLowerCase(Locale.ROOT);
 
-        // remove common trailing location like "HAMILTON, ON"
+        // FIRST remove location while comma is still intact
         t = t.replaceAll("\\s+[a-z]+(?:\\s+[a-z]+)*,\\s*[a-z]{2}$", "");
 
         // drop store numbers like W1105 or #1234
         t = t.replaceAll("\\bw\\d{3,}\\b", " ");
         t = t.replaceAll("#\\d{2,}", " ");
 
-        // keep only letters/numbers/spaces
+        // keep only letters/numbers/spaces (this removes the comma)
         t = t.replaceAll("[^a-z0-9 ]", " ");
 
         // squeeze spaces
         t = t.replaceAll("\\s+", " ").trim();
+
         return t;
     }
 
