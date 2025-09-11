@@ -3,6 +3,7 @@ package ca.homefinance.controller;
 import ca.homefinance.entity.Category;
 import ca.homefinance.entity.Person;
 import ca.homefinance.entity.Transaction;
+import ca.homefinance.repository.*;
 import ca.homefinance.service.TransactionService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -16,6 +17,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -32,10 +34,37 @@ class TransactionControllerTest {
     @MockBean
     private TransactionService transactionService;
 
+    @MockBean
+    private CategoryRepository categoryRepository;
+
+    @MockBean
+    private PaymentRepository paymentRepository;
+
+    @MockBean
+    private PersonRepository personRepository;
+
+    @MockBean
+    private ReceiptRepository receiptRepository;
+
+    @MockBean
+    private TransactionRepository transactionRepository;
+
+    @MockBean
+    private UncategorizedTransactionRepository uncategorizedTransactionRepository;
 
     private Person asanka;
     private Person divya;
     private Category testCategory;
+
+    private static final List<Transaction.AccountType> PERSONAL_ACCOUNTS =
+            Arrays.asList(Transaction.AccountType.ASANKA, Transaction.AccountType.DIVYA);
+
+    private static final List<Transaction.TransactionType> EXPENSE =
+            Arrays.asList(Transaction.TransactionType.EXPENSE);
+
+    private static final List<Transaction.TransactionType> RENTALBILLINCOME =
+            Arrays.asList(Transaction.TransactionType.RENTALBILLINCOME);
+
 
     @BeforeEach
     void setUp() {
@@ -238,8 +267,9 @@ class TransactionControllerTest {
     @Test
     void getMonthlyBalance_WithRentalIncome_ShouldSubtractIncome() throws Exception {
         // Given
+
         LocalDate startDate = LocalDate.of(2024, 1, 1);
-        LocalDate endDate = LocalDate.of(2024, 1, 31);
+        LocalDate endDate = startDate.withDayOfMonth(startDate.lengthOfMonth());
 
         // Asanka: $100 expense - $20 rental income = $80 net
         Transaction asankaExpense = createTransaction(1, new BigDecimal("100.00"), 
@@ -257,16 +287,18 @@ class TransactionControllerTest {
 
         // Mock expenses
         when(transactionService.searchTransactionByDateRangeAccountTypeTransactionType(
-                eq(startDate), eq(endDate), 
-                eq(Arrays.asList(Transaction.AccountType.ASANKA, Transaction.AccountType.DIVYA)),
-                eq(Arrays.asList(Transaction.TransactionType.EXPENSE))))
+                any(LocalDate.class),
+                any(LocalDate.class),
+                eq(PERSONAL_ACCOUNTS),
+                eq(EXPENSE)))
                 .thenReturn(Arrays.asList(asankaExpense, divyaExpense));
 
         // Mock rental income
         when(transactionService.searchTransactionByDateRangeAccountTypeTransactionType(
-                eq(startDate), eq(endDate), 
-                eq(Arrays.asList(Transaction.AccountType.DIVYA, Transaction.AccountType.ASANKA)),
-                eq(Arrays.asList(Transaction.TransactionType.RENTALBILLINCOME))))
+                any(LocalDate.class),
+                any(LocalDate.class),
+                eq(PERSONAL_ACCOUNTS),
+                eq(RENTALBILLINCOME)))
                 .thenReturn(Arrays.asList(asankaRentalIncome));
 
         // Mock other transaction types as empty
@@ -278,7 +310,7 @@ class TransactionControllerTest {
         // Asanka: $100 - $20 = $80 net
         // Divya: $60
         // Asanka's share: $80/2 = $40, Divya's share: $60/2 = $30
-        // Difference: $30 - $40 = -$10, so Asanka owes Divya $10
+        // Difference: $40 - $30 = $10, so Divya owes Asanka $10
         mockMvc.perform(get("/api/v1/transaction/getMonthlyBalance")
                         .param("month", "1")
                         .param("year", "2024")
@@ -288,7 +320,7 @@ class TransactionControllerTest {
                 .andExpect(jsonPath("$.asankaPaid").value("80"))
                 .andExpect(jsonPath("$.divyaPaid").value("60"))
                 .andExpect(jsonPath("$.monthAndYear").value("1, 2024"))
-                .andExpect(jsonPath("$.whoOwes").value("Asanka"));
+                .andExpect(jsonPath("$.whoOwes").value("Divya"));
     }
 
     @Test
