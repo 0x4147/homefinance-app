@@ -1217,7 +1217,7 @@ const MonthlyBalanceChecker = () => {
         return new Intl.NumberFormat('en-CA', {
             style: 'currency',
             currency: 'CAD'
-        }).format(amount);
+        }).format(amount || 0);
     };
 
     const getMonthName = (monthValue: string) => {
@@ -1288,12 +1288,12 @@ const MonthlyBalanceChecker = () => {
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
                                 <p className="text-blue-800 font-medium">
-                                    Asanka's Total: {formatCurrency(balanceData.asankaTotal)}
+                                    Asanka Paid: {formatCurrency((balanceData as any).asankaPaid ?? (balanceData as any).asankaTotal)}
                                 </p>
                             </div>
                             <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
                                 <p className="text-green-800 font-medium">
-                                    Divya's Total: {formatCurrency(balanceData.divyaTotal)}
+                                    Divya Paid: {formatCurrency((balanceData as any).divyaPaid ?? (balanceData as any).divyaTotal)}
                                 </p>
                             </div>
                         </div>
@@ -1305,7 +1305,7 @@ const MonthlyBalanceChecker = () => {
                         {balanceData.whoOwes ? (
                             <div className="p-4 bg-orange-50 border border-orange-200 rounded-lg">
                                 <p className="text-orange-800 font-medium">
-                                    {balanceData.whoOwes} owes {formatCurrency(balanceData.amount)} to the other person
+                                    {balanceData.whoOwes} owes {formatCurrency((balanceData as any).balanceAmount ?? (balanceData as any).amount)} to the other person
                                 </p>
                             </div>
                         ) : (

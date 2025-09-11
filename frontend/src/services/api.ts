@@ -45,9 +45,9 @@ export interface TransactionSummary {
 export interface MonthlyBalanceResponseDto {
     monthAndYear: string;
     whoOwes: string;
-    amount: number;
-    asankaTotal: number;
-    divyaTotal: number;
+    balanceAmount: number;
+    asankaPaid: number;
+    divyaPaid: number;
 }
 
 export interface UncategorizedTransaction {

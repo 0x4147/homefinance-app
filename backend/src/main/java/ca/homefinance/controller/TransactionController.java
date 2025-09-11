@@ -189,9 +189,9 @@ public class TransactionController {
 
             BigDecimal difference = amountDividedByTwoDivya.subtract(amountDividedByTwoAsanka);
 
-            monthlyBalanceResponseDto.setBalanceAmount(difference.abs().toString());
-            monthlyBalanceResponseDto.setAsankaPaid(totalExpensesMinusIncomeAsanka.abs().toString());
-            monthlyBalanceResponseDto.setDivyaPaid(totalExpensesMinusIncomeDivya.abs().toString());
+            monthlyBalanceResponseDto.setBalanceAmount(difference.abs());
+            monthlyBalanceResponseDto.setAsankaPaid(totalExpensesMinusIncomeAsanka.abs());
+            monthlyBalanceResponseDto.setDivyaPaid(totalExpensesMinusIncomeDivya.abs());
             monthlyBalanceResponseDto.setMonthAndYear(month + ", " + year);
 
             if (difference.compareTo(BigDecimal.ZERO) > 0) {
