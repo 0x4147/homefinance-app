@@ -204,9 +204,9 @@ public class TransactionController {
                 // Both paid equally
             }
 
-            return new ResponseEntity<>(monthlyBalanceResponseDto, HttpStatus.OK);
+            return ResponseEntity.ok(monthlyBalanceResponseDto);
         } catch (NumberFormatException e) {
-            throw new RuntimeException(e);
+            return new ResponseEntity<>( HttpStatus.BAD_REQUEST);
         }
     }
 
