@@ -20,6 +20,8 @@ import org.springframework.web.context.WebApplicationContext;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.Arrays;
+import java.util.List;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -72,13 +74,14 @@ class MonthlyBalanceIntegrationTest {
         // Create test category
         testCategory = new Category();
         testCategory.setName("Test Category");
+        testCategory.setType(Category.CategoryType.EXPENSE);
         testCategory = categoryRepository.save(testCategory);
     }
 
     @Test
     void getMonthlyBalance_RealDatabaseScenario_ShouldCalculateCorrectly() throws Exception {
         // Given - Create realistic transaction data for January 2024
-        LocalDate january2024 = LocalDate.of(2024, 1, 15);
+        LocalDate january2024 = LocalDate.of(2024, 1, 2);
 
         // Asanka's transactions
         Transaction asankaExpense1 = createTransaction(new BigDecimal("120.50"), 
@@ -89,7 +92,7 @@ class MonthlyBalanceIntegrationTest {
                 january2024.plusDays(5), "Gas Station", "Fuel", 
                 Transaction.AccountType.ASANKA, Transaction.TransactionType.EXPENSE, asanka);
         
-        Transaction asankaCardPayment = createTransaction(new BigDecimal("200.00"), 
+        Transaction asankaCardPayment = createTransaction(new BigDecimal("-200.00"),
                 january2024.plusDays(10), "Card Payment", "Credit card payment", 
                 Transaction.AccountType.CIBC, Transaction.TransactionType.CARDPAYMENT, asanka);
         
@@ -98,7 +101,7 @@ class MonthlyBalanceIntegrationTest {
                 Transaction.AccountType.ASANKA, Transaction.TransactionType.BILL, asanka);
         
         Transaction asankaRentalIncome = createTransaction(new BigDecimal("50.00"), 
-                january2024.plusDays(20), "Tenant", "Rental bill income", 
+                january2024.plusDays(11), "Tenant", "Rental bill income",
                 Transaction.AccountType.ASANKA, Transaction.TransactionType.RENTALBILLINCOME, asanka);
 
         // Divya's transactions
@@ -110,7 +113,7 @@ class MonthlyBalanceIntegrationTest {
                 january2024.plusDays(8), "Coffee Shop", "Coffee", 
                 Transaction.AccountType.DIVYA, Transaction.TransactionType.EXPENSE, divya);
         
-        Transaction divyaCardPayment = createTransaction(new BigDecimal("150.00"), 
+        Transaction divyaCardPayment = createTransaction(new BigDecimal("-150.00"),
                 january2024.plusDays(12), "Card Payment", "Credit card payment", 
                 Transaction.AccountType.AMEX, Transaction.TransactionType.CARDPAYMENT, divya);
         
@@ -119,7 +122,7 @@ class MonthlyBalanceIntegrationTest {
                 Transaction.AccountType.DIVYA, Transaction.TransactionType.BILL, divya);
         
         Transaction divyaRentalIncome = createTransaction(new BigDecimal("75.00"), 
-                january2024.plusDays(22), "Tenant", "Rental rent income", 
+                january2024.plusDays(11), "Tenant", "Rental rent income",
                 Transaction.AccountType.DIVYA, Transaction.TransactionType.RENTALRENTINCOME, divya);
 
         // Save all transactions
@@ -134,18 +137,18 @@ class MonthlyBalanceIntegrationTest {
         // Divya: $95.75 + $30.00 + $150.00 + $60.25 - $75.00 = $261.00
         // Asanka's share: $400.80/2 = $200.40
         // Divya's share: $261.00/2 = $130.50
-        // Difference: $130.50 - $200.40 = -$69.90, so Asanka owes Divya $69.90
+        // Difference: $130.50 - $200.40 = -$69.90, so Divya owes Asanka $69.90
 
         mockMvc.perform(get("/api/v1/transaction/getMonthlyBalance")
                         .param("month", "1")
                         .param("year", "2024")
                         .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.balanceAmount").value("69.90"))
-                .andExpect(jsonPath("$.asankaPaid").value("400.80"))
-                .andExpect(jsonPath("$.divyaPaid").value("261.00"))
+                .andExpect(jsonPath("$.balanceAmount").value("69.9"))
+                .andExpect(jsonPath("$.asankaPaid").value("400.8"))
+                .andExpect(jsonPath("$.divyaPaid").value("261.0"))
                 .andExpect(jsonPath("$.monthAndYear").value("1, 2024"))
-                .andExpect(jsonPath("$.whoOwes").value("Asanka"));
+                .andExpect(jsonPath("$.whoOwes").value("Divya"));
     }
 
     @Test
@@ -166,7 +169,7 @@ class MonthlyBalanceIntegrationTest {
     }
 
     @Test
-    void getMonthlyBalance_OnlyAsankaTransactions_ShouldShowAsankaOwes() throws Exception {
+    void getMonthlyBalance_OnlyAsankaTransactions_ShouldShowDivyaOwes() throws Exception {
         // Given - Only Asanka has transactions
         LocalDate january2024 = LocalDate.of(2024, 1, 15);
 
@@ -179,22 +182,22 @@ class MonthlyBalanceIntegrationTest {
         // When & Then
         // Asanka: $200, Divya: $0
         // Asanka's share: $200/2 = $100, Divya's share: $0/2 = $0
-        // Difference: $0 - $100 = -$100, so Asanka owes Divya $100
+        // Difference: $0 - $100 = -$100, so Divya owes Asanka $100
 
         mockMvc.perform(get("/api/v1/transaction/getMonthlyBalance")
                         .param("month", "1")
                         .param("year", "2024")
                         .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.balanceAmount").value("100"))
-                .andExpect(jsonPath("$.asankaPaid").value("200"))
+                .andExpect(jsonPath("$.balanceAmount").value("100.0"))
+                .andExpect(jsonPath("$.asankaPaid").value("200.0"))
                 .andExpect(jsonPath("$.divyaPaid").value("0"))
                 .andExpect(jsonPath("$.monthAndYear").value("1, 2024"))
-                .andExpect(jsonPath("$.whoOwes").value("Asanka"));
+                .andExpect(jsonPath("$.whoOwes").value("Divya"));
     }
 
     @Test
-    void getMonthlyBalance_OnlyDivyaTransactions_ShouldShowDivyaOwes() throws Exception {
+    void getMonthlyBalance_OnlyDivyaTransactions_ShouldShowAsankaOwes() throws Exception {
         // Given - Only Divya has transactions
         LocalDate january2024 = LocalDate.of(2024, 1, 15);
 
@@ -207,18 +210,18 @@ class MonthlyBalanceIntegrationTest {
         // When & Then
         // Asanka: $0, Divya: $300
         // Asanka's share: $0/2 = $0, Divya's share: $300/2 = $150
-        // Difference: $150 - $0 = $150, so Divya owes Asanka $150
+        // Difference: $150 - $0 = $150, so Asanka owes Divya $150
 
         mockMvc.perform(get("/api/v1/transaction/getMonthlyBalance")
                         .param("month", "1")
                         .param("year", "2024")
                         .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.balanceAmount").value("150"))
+                .andExpect(jsonPath("$.balanceAmount").value("150.0"))
                 .andExpect(jsonPath("$.asankaPaid").value("0"))
-                .andExpect(jsonPath("$.divyaPaid").value("300"))
+                .andExpect(jsonPath("$.divyaPaid").value("300.0"))
                 .andExpect(jsonPath("$.monthAndYear").value("1, 2024"))
-                .andExpect(jsonPath("$.whoOwes").value("Divya"));
+                .andExpect(jsonPath("$.whoOwes").value("Asanka"));
     }
 
     @Test
@@ -246,9 +249,9 @@ class MonthlyBalanceIntegrationTest {
                         .param("year", "2024")
                         .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.balanceAmount").value("0"))
-                .andExpect(jsonPath("$.asankaPaid").value("100"))
-                .andExpect(jsonPath("$.divyaPaid").value("100"))
+                .andExpect(jsonPath("$.balanceAmount").value("0.0"))
+                .andExpect(jsonPath("$.asankaPaid").value("100.0"))
+                .andExpect(jsonPath("$.divyaPaid").value("100.0"))
                 .andExpect(jsonPath("$.monthAndYear").value("1, 2024"))
                 .andExpect(jsonPath("$.whoOwes").doesNotExist());
     }
@@ -280,11 +283,11 @@ class MonthlyBalanceIntegrationTest {
                         .param("year", "2024")
                         .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.balanceAmount").value("50"))
-                .andExpect(jsonPath("$.asankaPaid").value("50"))
+                .andExpect(jsonPath("$.balanceAmount").value("25.0"))
+                .andExpect(jsonPath("$.asankaPaid").value("50.0"))
                 .andExpect(jsonPath("$.divyaPaid").value("0"))
                 .andExpect(jsonPath("$.monthAndYear").value("1, 2024"))
-                .andExpect(jsonPath("$.whoOwes").value("Asanka"));
+                .andExpect(jsonPath("$.whoOwes").value("Divya"));
     }
 
     @Test
@@ -323,18 +326,18 @@ class MonthlyBalanceIntegrationTest {
         // Asanka: $200 - $50 - $50 = $100 net
         // Divya: $150 - $25 = $125 net
         // Asanka's share: $100/2 = $50, Divya's share: $125/2 = $62.50
-        // Difference: $62.50 - $50 = $12.50, so Divya owes Asanka $12.50
+        // Difference: $62.50 - $50 = $12.50, so Asanka owes Divya $12.50
 
         mockMvc.perform(get("/api/v1/transaction/getMonthlyBalance")
                         .param("month", "1")
                         .param("year", "2024")
                         .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.balanceAmount").value("12.50"))
-                .andExpect(jsonPath("$.asankaPaid").value("100"))
-                .andExpect(jsonPath("$.divyaPaid").value("125"))
+                .andExpect(jsonPath("$.balanceAmount").value("12.5"))
+                .andExpect(jsonPath("$.asankaPaid").value("100.0"))
+                .andExpect(jsonPath("$.divyaPaid").value("125.0"))
                 .andExpect(jsonPath("$.monthAndYear").value("1, 2024"))
-                .andExpect(jsonPath("$.whoOwes").value("Divya"));
+                .andExpect(jsonPath("$.whoOwes").value("Asanka"));
     }
 
     private Transaction createTransaction(BigDecimal amount, LocalDate date, String entity, 

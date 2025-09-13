@@ -78,7 +78,7 @@ class MonthlyBalanceValidationTest {
         BigDecimal difference = divyaShare.subtract(asankaShare);
 
         // Then
-        assertEquals(BigDecimal.ZERO, difference);
+        assertEquals(new BigDecimal("0.00"), difference);
         assertEquals(new BigDecimal("50.00"), asankaShare);
         assertEquals(new BigDecimal("50.00"), divyaShare);
     }
