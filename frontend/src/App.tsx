@@ -265,7 +265,7 @@ const Dashboard = () => {
                 const endDate = now.toISOString().split('T')[0];
 
                 // Load category data
-                const categoryResponse = await apiService.getExpensesByCategory(startDate, endDate);
+                const categoryResponse = await apiService.getExpensesByCategoryTop10(startDate, endDate);
                 if (categoryResponse) {
                     setCategoryData({
                         labels: Object.keys(categoryResponse.totals),
@@ -275,7 +275,7 @@ const Dashboard = () => {
                 }
 
                 // Load merchant data
-                const merchantResponse = await apiService.getExpensesByEntity(startDate, endDate);
+                const merchantResponse = await apiService.getExpensesByEntityTop10(startDate, endDate);
                 if (merchantResponse) {
                     setMerchantData({
                         labels: Object.keys(merchantResponse.totals),
@@ -336,13 +336,13 @@ const Dashboard = () => {
             
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 <PieChartCard 
-                    title="Spending by Category (Past 3 Months)" 
+                    title="Top 10 Spending by Category (Past 3 Months)" 
                     data={categoryData} 
                     colors={colors.slice(0, 6)} 
                     onSliceClick={(label) => openTransactions(`Transactions in ${label}`, categoryData.details?.[label])}
                 />
                 <PieChartCard 
-                    title="Spending by Merchant (Past 3 Months)" 
+                    title="Top 10 Spending by Merchant (Past 3 Months)" 
                     data={merchantData} 
                     colors={colors.slice(6, 12)} 
                     onSliceClick={(label) => openTransactions(`Transactions at ${label}`, merchantData.details?.[label])}

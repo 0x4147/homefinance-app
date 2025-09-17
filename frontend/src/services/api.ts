@@ -147,6 +147,16 @@ class ApiService {
         return this.makeRequest<TransactionSummary>(`/transaction/getExpensesByCategory?${params}`);
     }
 
+    // Get expenses by category Top 10
+    async getExpensesByCategoryTop10(startDate: string, endDate: string): Promise<TransactionSummary> {
+        log.info(`Fetching expenses by category from ${startDate} to ${endDate}`);
+        const params = new URLSearchParams({
+            startDate,
+            endDate,
+        });
+        return this.makeRequest<TransactionSummary>(`/transaction/getExpensesByCategoryTop10?${params}`);
+    }
+
     // Get expenses by entity (merchant)
     async getExpensesByEntity(startDate: string, endDate: string): Promise<TransactionSummary> {
         log.info(`Fetching expenses by entity from ${startDate} to ${endDate}`);
@@ -155,6 +165,16 @@ class ApiService {
             endDate,
         });
         return this.makeRequest<TransactionSummary>(`/transaction/getExpensesByEntity?${params}`);
+    }
+
+    // Get expenses by entity (merchant) Top 10
+    async getExpensesByEntityTop10(startDate: string, endDate: string): Promise<TransactionSummary> {
+        log.info(`Fetching expenses by entity from ${startDate} to ${endDate}`);
+        const params = new URLSearchParams({
+            startDate,
+            endDate,
+        });
+        return this.makeRequest<TransactionSummary>(`/transaction/getExpensesByEntityTop10?${params}`);
     }
 
     // Get expenses by month

@@ -235,6 +235,18 @@ public class TransactionController {
         return new ResponseEntity<>(new TransactionSummary(totals, details), HttpStatus.OK);
     }
 
+    @GetMapping("/getExpensesByCategoryTop10")
+    public ResponseEntity<TransactionSummary> getExpensesByCategoryTop10(@RequestParam LocalDate startDate, @RequestParam LocalDate endDate) {
+        try{
+            return new ResponseEntity<>(transactionService.getExpensesByCategoryTop10(startDate, endDate), HttpStatus.OK);
+        }
+         catch (Exception e){
+            log.error("error preparing categories", e);
+            throw new RuntimeException(e);
+        }
+    }
+
+
     @GetMapping("/getExpensesByEntity")
     public ResponseEntity<TransactionSummary> getExpensesByEntity(@RequestParam LocalDate startDate, @RequestParam LocalDate endDate) {
         Map<String, BigDecimal> totals = new HashMap<>();
@@ -252,6 +264,17 @@ public class TransactionController {
         }
 
         return new ResponseEntity<>(new TransactionSummary(totals, details), HttpStatus.OK);
+    }
+
+    @GetMapping("/getExpensesByEntityTop10")
+    public ResponseEntity<TransactionSummary> getExpensesByEntityTop10(@RequestParam LocalDate startDate, @RequestParam LocalDate endDate) {
+        try{
+            return new ResponseEntity<>(transactionService.getExpensesByEntityTop10(startDate, endDate), HttpStatus.OK);
+        }
+        catch (Exception e){
+            log.error("error preparing categories", e);
+            throw new RuntimeException(e);
+        }
     }
 
     @GetMapping("/getExpensesByMonth")
