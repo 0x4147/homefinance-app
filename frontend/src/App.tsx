@@ -242,8 +242,8 @@ const PieChartCard = ({ title, data, colors, onSliceClick }: { title: string; da
 
 // --- Dashboard Component ---
 const Dashboard = () => {
-    const [categoryData, setCategoryData] = useState<{ labels: string[]; values: number[]; details?: Record<string, (TransactionDto | Transaction)[]> }>({ labels: [], values: [] });
-    const [merchantData, setMerchantData] = useState<{ labels: string[]; values: number[]; details?: Record<string, (TransactionDto | Transaction)[]> }>({ labels: [], values: [] });
+    const [categoryData, setCategoryData] = useState<{ labels: string[]; values: number[]; details?: Record<string, (TransactionDto | Transaction)[]>; originalKeys?: string[] }>({ labels: [], values: [] });
+    const [merchantData, setMerchantData] = useState<{ labels: string[]; values: number[]; details?: Record<string, (TransactionDto | Transaction)[]>; originalKeys?: string[] }>({ labels: [], values: [] });
     const [monthlyData, setMonthlyData] = useState<{ labels: string[]; values: number[]; details?: Record<string, (TransactionDto | Transaction)[]>; originalKeys?: string[] }>({ labels: [], values: [] });
     const [isLoading, setIsLoading] = useState(true);
     const [modalOpen, setModalOpen] = useState(false);
@@ -270,17 +270,23 @@ const Dashboard = () => {
                     setCategoryData({
                         labels: Object.keys(categoryResponse.totals),
                         values: Object.values(categoryResponse.totals).map(val => Number(val)),
-                        details: categoryResponse.details
+                        details: categoryResponse.details,
+                        originalKeys:  Object.keys(categoryResponse.totals)
                     });
                 }
 
                 // Load merchant data
                 const merchantResponse = await apiService.getExpensesByEntityTop10(startDate, endDate);
                 if (merchantResponse) {
+                    const originalKeys = Object.keys(merchantResponse.totals);
+                    const labels = originalKeys.map(key =>
+                        key.length > 15 ? key.substring(0, 10) + "…" : key
+                    );                    
                     setMerchantData({
-                        labels: Object.keys(merchantResponse.totals),
+                        labels,
                         values: Object.values(merchantResponse.totals).map(val => Number(val)),
-                        details: merchantResponse.details
+                        details: merchantResponse.details,
+                        originalKeys:  Object.keys(merchantResponse.totals)
                     });
                 }
 
@@ -334,23 +340,29 @@ const Dashboard = () => {
             <WelcomeHeader />
             <AthenaSummary />
             
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                <PieChartCard 
-                    title="Top 10 Spending by Category (Past 3 Months)" 
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <BarChartCard
+                    title="Top10 Spending by Category (Past 3 Months)" 
                     data={categoryData} 
-                    colors={colors.slice(0, 6)} 
-                    onSliceClick={(label) => openTransactions(`Transactions in ${label}`, categoryData.details?.[label])}
+                    colors={colors.slice(0, 12)}
+                    onBarClick={(index) => {
+                        const key = categoryData.originalKeys?.[index] || '';
+                        openTransactions(`Transactions in ${categoryData.labels[index]}`, categoryData.details?.[key]);
+                    }}
                 />
-                <PieChartCard 
-                    title="Top 10 Spending by Merchant (Past 3 Months)" 
+                <BarChartCard 
+                    title="Top10 Spending by Merchant (Past 3 Months)" 
                     data={merchantData} 
                     colors={colors.slice(6, 12)} 
-                    onSliceClick={(label) => openTransactions(`Transactions at ${label}`, merchantData.details?.[label])}
+                    onBarClick={(index) => {
+                        const key = merchantData.originalKeys?.[index] || '';
+                        openTransactions(`Transactions in ${merchantData.labels[index]}`, merchantData.details?.[key]);
+                    }}
                 />
                 <BarChartCard 
                     title="Spending by Month (Past 3 Months)" 
                     data={monthlyData} 
-                    colors={colors.slice(0, 3)} 
+                    colors={colors.slice(0, 12)} 
                     onBarClick={(index) => {
                         const key = monthlyData.originalKeys?.[index] || '';
                         openTransactions(`Transactions in ${monthlyData.labels[index]}`, monthlyData.details?.[key]);
