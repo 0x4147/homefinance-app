@@ -62,7 +62,10 @@ public class AMEXTransactionFieldMapper implements FieldSetMapper<Transaction> {
 
             String rawAmount = fieldSet.readString("amount");
             logger.debug("Raw amount from field set: {}", rawAmount);
-            String cleanedAmount = rawAmount.replace("$", "").trim();
+            String cleanedAmount = rawAmount.replace("\"", "")
+                    .replace("$", "")
+                    .replace(",", "")
+                    .trim();
             BigDecimal amount = new BigDecimal(cleanedAmount);
             logger.debug("Cleaned and parsed amount: {}", amount);
             transaction.setAmount(amount);
