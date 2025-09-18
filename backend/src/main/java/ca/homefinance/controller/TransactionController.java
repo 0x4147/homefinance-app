@@ -279,8 +279,8 @@ public class TransactionController {
 
     @GetMapping("/getExpensesByMonth")
     public ResponseEntity<TransactionSummary> getExpensesByMonth(@RequestParam YearMonth startMonth, @RequestParam YearMonth endMonth) {
-        Map<String, BigDecimal> totals = new HashMap<>();
-        Map<String, List<Transaction>> details = new HashMap<>();
+        Map<String, BigDecimal> totals = new TreeMap<>(Comparator.reverseOrder());
+        Map<String, List<Transaction>> details = new TreeMap<>(Comparator.reverseOrder());
         LocalDate startDate = startMonth.atDay(1);
         LocalDate endDate = endMonth.atEndOfMonth();
 
