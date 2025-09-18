@@ -233,7 +233,7 @@ const PieChartCard = ({ title, data, colors, onSliceClick }: { title: string; da
     return (
         <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">{title}</h3>
-            <div className="h-64">
+            <div className="h-96 w-full flex items-center justify-center">
                 <Pie data={chartData} options={options} />
             </div>
         </div>
