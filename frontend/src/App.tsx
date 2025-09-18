@@ -763,7 +763,7 @@ const BarChartCard = ({ title, data, colors, onBarClick }: { title: string; data
     return (
         <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">{title}</h3>
-            <div className="h-64">
+            <div className="h-96 w-full flex items-center justify-center">
                 <Bar data={chartData} options={options} />
             </div>
         </div>
@@ -834,20 +834,33 @@ const SpendingInsights = () => {
         try {
             let data: TransactionSummary | undefined;
             if (selectedOption === 'category') {
-                data = await apiService.getExpensesByCategory(startDate, endDate);
+                data = await apiService.getExpensesByCategory(startDate, endDate);            
+                if (data) {
+                    const chartData = {
+                        labels: Object.keys(data.totals),
+                        values: Object.values(data.totals).map(val => Number(val))
+                    };
+                    setChartData(chartData);
+                    setDetailsMap(data.details);
+                    setOriginalKeys(null);
+                }
             } else if (selectedOption === 'merchant') {
-                data = await apiService.getExpensesByEntity(startDate, endDate);
+                data = await apiService.getExpensesByEntityTop10(startDate, endDate);
+                if (data) {
+                    const originalKeys = Object.keys(data.totals);
+                    const labels = originalKeys.map(key =>
+                        key.length > 20 ? key.substring(0, 10) + "…" : key
+                    );   
+                    const chartData = {
+                        labels,
+                        values: Object.values(data.totals).map(val => Number(val))
+                    };
+                    setChartData(chartData);
+                    setDetailsMap(data.details);
+                    setOriginalKeys(originalKeys);
+                }
             }
-            
-            if (data) {
-                const chartData = {
-                    labels: Object.keys(data.totals),
-                    values: Object.values(data.totals).map(val => Number(val))
-                };
-                setChartData(chartData);
-                setDetailsMap(data.details);
-                setOriginalKeys(null);
-            }
+
         } catch (error) {
             console.error('Error fetching data:', error);
             alert('Failed to fetch data. Please try again.');
@@ -1019,13 +1032,14 @@ const SpendingInsights = () => {
                             </button>
                             {chartData && (
                                 <div className="mt-6">
-                                    <PieChartCard 
+                                    <BarChartCard 
                                         title="Top Merchants" 
                                         data={chartData} 
                                         colors={colors.slice(6, 12)} 
-                                        onSliceClick={(label) => {
-                                            const txs = detailsMap?.[label] || [];
-                                            setModalTitle(`Transactions at ${label}`);
+                                        onBarClick={(index) => {
+                                            const key = originalKeys?.[index] || '';
+                                            const txs = (key && detailsMap) ? (detailsMap[key] || []) : [];
+                                            setModalTitle(`Transactions in ${chartData.labels[index]}`);
                                             setModalTransactions(txs);
                                             setModalOpen(true);
                                         }}
