@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { LayoutDashboard, PlusSquare, List, BarChart2, Calendar, Receipt, Brain, Tag } from 'lucide-react';
 import { Chart as ChartJS, ArcElement, Tooltip, Legend, CategoryScale, LinearScale, PointElement, LineElement, Title, BarElement } from 'chart.js';
 import { Pie, Bar } from 'react-chartjs-2';
@@ -540,6 +540,7 @@ const ViewTransactions = () => {
     const [transactions, setTransactions] = useState<TransactionDto[]>([]);
     const [isLoading, setIsLoading] = useState<boolean>(false);
     const [error, setError] = useState<string>('');
+    const [sortConfig, setSortConfig] = useState<{ key: keyof TransactionDto; direction: "asc" | "desc" } | null>(null);
 
     const handleFilter = async () => {
         if (!startDate || !endDate) {
@@ -574,6 +575,43 @@ const ViewTransactions = () => {
             month: 'short',
             day: 'numeric'
         });
+    };
+
+    const handleSort = (key: keyof TransactionDto) => {
+        setSortConfig((prev) => {
+            if (prev?.key === key && prev.direction === "asc") {
+                return { key, direction: "desc" };
+            }
+            return { key, direction: "asc" };
+        });
+    };
+
+    const sortedTransactions = useMemo(() => {
+        if (!sortConfig) return transactions;
+
+        return [...transactions].sort((a, b) => {
+            const { key, direction } = sortConfig;
+            let valA = a[key];
+            let valB = b[key];
+
+            // Special handling for date
+            if (key === "date") {
+                valA = new Date(a.date).getTime();
+                valB = new Date(b.date).getTime();
+            }
+
+            if (typeof valA === "number" && typeof valB === "number") {
+                return direction === "asc" ? valA - valB : valB - valA;
+            }
+            return direction === "asc"
+                ? String(valA).localeCompare(String(valB))
+                : String(valB).localeCompare(String(valA));
+        });
+    }, [transactions, sortConfig]);
+
+    const renderSortIcon = (key: keyof TransactionDto) => {
+        if (sortConfig?.key !== key) return null;
+        return sortConfig.direction === "asc" ? "▲" : "▼";
     };
 
     return (
@@ -649,23 +687,23 @@ const ViewTransactions = () => {
                         <table className="min-w-full divide-y divide-gray-200">
                             <thead className="bg-gray-50">
                                 <tr>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                        Date
+                                    <th onClick={() => handleSort("date")} className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer">
+                                        Date {renderSortIcon("date")}
                                     </th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                        Merchant
+                                    <th onClick={() => handleSort("entity")} className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer">
+                                        Merchant {renderSortIcon("entity")}
                                     </th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                        Type
+                                    <th onClick={() => handleSort("transactionType")} className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer">
+                                        Type {renderSortIcon("transactionType")}
                                     </th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                        Amount
+                                    <th onClick={() => handleSort("amount")} className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer">
+                                        Amount {renderSortIcon("amount")}
                                     </th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                        Account
+                                    <th onClick={() => handleSort("account")} className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer">
+                                        Account {renderSortIcon("account")}
                                     </th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                        Category
+                                    <th onClick={() => handleSort("category")} className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer">
+                                        Category {renderSortIcon("category")}
                                     </th>
                                 </tr>
                             </thead>
@@ -680,7 +718,7 @@ const ViewTransactions = () => {
                                         </td>
                                     </tr>
                                 ) : (
-                                    transactions.map((transaction, index) => (
+                                    sortedTransactions.map((transaction, index) => (
                                         <tr key={index} className="hover:bg-gray-50">
                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                                                 {formatDate(transaction.date)}
