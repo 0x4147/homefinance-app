@@ -71,6 +71,14 @@ export interface Category {
     description?: string;
 }
 
+export interface AthenaInsightsResponse {
+    analysis: string;
+}
+
+export interface AthenaChatResponse {
+    answer: string;
+}
+
 // API service class
 class ApiService {
     private async makeRequest<T>(endpoint: string, options?: RequestInit): Promise<T> {
@@ -278,6 +286,28 @@ class ApiService {
             headers: {
                 'Content-Type': 'application/x-www-form-urlencoded',
             },
+        });
+    }
+
+    // Athena: dashboard insights (last 3 months)
+    async getAthenaInsights(): Promise<AthenaInsightsResponse> {
+        log.info('Fetching Athena insights');
+        return this.makeRequest<AthenaInsightsResponse>('/athena/insights');
+    }
+
+    // Athena: chat with optional date range
+    async athenaChat(question: string, start?: string, end?: string): Promise<AthenaChatResponse> {
+        log.info('Sending Athena chat question');
+        const params = new URLSearchParams();
+        params.set('question', question);
+        if (start) params.set('start', start);
+        if (end) params.set('end', end);
+        return this.makeRequest<AthenaChatResponse>(`/athena/chat`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: params.toString(),
         });
     }
 }
