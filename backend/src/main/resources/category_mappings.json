@@ -13,7 +13,8 @@
     "SWADESH",
     "WALMART",
     "DESI MANDI",
-    "FRESHII"
+    "FRESHII",
+    "WAL-MART"
   ],
   "Take Out": [
     "KARDAMOM KITCHEN",
@@ -23,6 +24,7 @@
     "POPEYES",
     "TIM HORTONS",
     "MCDONALDS",
+    "MCDONALD",
     "ORIGINALSHAWARMA",
     "CAFE",
     "RESTAURANT",
@@ -56,7 +58,8 @@
     "ST JOSEPH",
     "MCMASTER",
     "ST. JOSEPH'S",
-    "HEALTHCARE"
+    "HEALTHCARE",
+    "REXALL"
   ],
   "Amazon": [
     "AMAZON",
@@ -70,14 +73,33 @@
     "IKEA",
     "CANADIAN TIRE",
     "BEST BUY",
-    "DOLLARAMA"
+    "DOLLARAMA",
+    "RELIANCE"
   ],
   "Entertainment": [
     "LCBO",
-    "THE BEER STORE"
+    "THE BEER STORE",
+    "NETFLIX"
+  ],
+  "Alcohol": [
+    "LCBO",
+    "THE BEER STORE",
+    "NETFLIX"
   ],
   "Card payment": [
     "PAYMENT",
     "THANK YOU"
+  ],
+  "Card loan": [
+    "WFCUCONDITIONAL"
+  ],
+  "Utility Bill": [
+    "ALECTRA",
+    "ENBRIDGE"
+  ],
+  "Clothing": [
+    "OLD NAVY",
+    "H&M",
+    "CARTERS"
   ]
 }

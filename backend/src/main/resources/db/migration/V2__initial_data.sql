@@ -22,6 +22,8 @@ VALUES
     ('Amazon', 'EXPENSE'),
     ('Temu', 'EXPENSE'),
     ('Card payment', 'INCOME'),
-    ('Card loan', 'EXPENSE');
+    ('Card loan', 'EXPENSE'),
+    ('Alcohol', 'EXPENSE'),
+    ('Clothing', 'EXPENSE');
 
 
