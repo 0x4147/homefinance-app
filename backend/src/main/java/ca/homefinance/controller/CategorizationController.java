@@ -154,7 +154,7 @@ public class CategorizationController {
      * Review and categorize an uncategorized transaction
      */
     @PostMapping("/review")
-    public ResponseEntity<String> reviewUncategorizedTransaction(
+    public ResponseEntity<Map<String, String>> reviewUncategorizedTransaction(
             @RequestParam Integer uncategorizedId,
             @RequestParam String assignedCategory) {
         
@@ -176,8 +176,8 @@ public class CategorizationController {
 
         // Learn from this correction
         categorizationService.learnFromUserCorrection(uncategorized.getMerchant(), assignedCategory);
-        
-        return new ResponseEntity<>("Transaction reviewed and learning applied", HttpStatus.OK);
+
+        return ResponseEntity.ok(Map.of("message", "Transaction reviewed and learning applied"));
     }
 
     /**
