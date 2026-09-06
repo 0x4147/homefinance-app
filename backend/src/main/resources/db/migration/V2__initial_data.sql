@@ -21,6 +21,9 @@ VALUES
     ('Take Out', 'EXPENSE'),
     ('Amazon', 'EXPENSE'),
     ('Temu', 'EXPENSE'),
-    ('Card payment', 'INCOME');
+    ('Card payment', 'INCOME'),
+    ('Card loan', 'EXPENSE'),
+    ('Alcohol', 'EXPENSE'),
+    ('Clothing', 'EXPENSE');
 
 
