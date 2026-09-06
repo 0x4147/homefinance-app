@@ -1,5 +1,6 @@
 package ca.homefinance.service;
 
+import ca.homefinance.dto.MonthlyBalanceResponseDto;
 import ca.homefinance.entity.Person;
 import ca.homefinance.entity.Transaction;
 import ca.homefinance.repository.TransactionRepository;
@@ -17,6 +18,8 @@ import java.util.Collections;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -263,8 +266,158 @@ class TransactionServiceTest {
         assertTrue(result.stream().allMatch(t -> t.getDate().equals(LocalDate.of(2024, 1, 15))));
     }
 
-    private Transaction createTransaction(Integer transactionId, BigDecimal amount, LocalDate date, 
-                                        String entity, String details, Transaction.AccountType account, 
+    @Test
+    void getMonthlyBalance_EqualPayments_ShouldReturnZeroBalance() {
+        // Given
+        LocalDate startDate = LocalDate.of(2024, 1, 1);
+        LocalDate endDate = LocalDate.of(2024, 1, 31);
+
+        when(transactionRepository.searchTransactionByDateRangeAccountTypeTransactionType(
+                eq(startDate), eq(endDate), any(), any()))
+                .thenReturn(Collections.emptyList());
+
+        // When
+        MonthlyBalanceResponseDto result = transactionService.getMonthlyBalance(1, 2024);
+
+        // Then
+        assertEquals(BigDecimal.ZERO, result.getBalanceAmount());
+        assertEquals(BigDecimal.ZERO, result.getAsankaPaid());
+        assertEquals(BigDecimal.ZERO, result.getDivyaPaid());
+        assertEquals("1, 2024", result.getMonthAndYear());
+        assertNull(result.getWhoOwes());
+    }
+
+    @Test
+    void getMonthlyBalance_AsankaOwesDivya_ShouldReturnCorrectBalance() {
+        // Given
+        LocalDate startDate = LocalDate.of(2024, 1, 1);
+        LocalDate endDate = LocalDate.of(2024, 1, 31);
+
+        Transaction asankaExpense = createTransaction(1, new BigDecimal("100.00"),
+                LocalDate.of(2024, 1, 15), "Test Store", "Test expense",
+                Transaction.AccountType.ASANKA, Transaction.TransactionType.EXPENSE, asanka);
+
+        when(transactionRepository.searchTransactionByDateRangeAccountTypeTransactionType(
+                eq(startDate), eq(endDate),
+                eq(Arrays.asList(Transaction.AccountType.ASANKA, Transaction.AccountType.DIVYA)),
+                eq(Arrays.asList(Transaction.TransactionType.EXPENSE))))
+                .thenReturn(Arrays.asList(asankaExpense));
+
+        when(transactionRepository.searchTransactionByDateRangeAccountTypeTransactionType(
+                any(LocalDate.class), any(LocalDate.class),
+                eq(Arrays.asList(Transaction.AccountType.DIVYA, Transaction.AccountType.ASANKA)),
+                any()))
+                .thenReturn(Collections.emptyList());
+
+        when(transactionRepository.searchTransactionByDateRangeAccountTypeTransactionType(
+                any(LocalDate.class), any(LocalDate.class),
+                eq(Arrays.asList(Transaction.AccountType.CIBC, Transaction.AccountType.AMEX)),
+                eq(Arrays.asList(Transaction.TransactionType.CARDPAYMENT))))
+                .thenReturn(Collections.emptyList());
+
+        // When
+        // Asanka paid $100, Divya paid $0
+        // Asanka's share: $100/2 = $50, Divya's share: $0/2 = $0
+        // Difference: $0 - $50 = -$50, so Divya owes Asanka $50
+        MonthlyBalanceResponseDto result = transactionService.getMonthlyBalance(1, 2024);
+
+        // Then
+        assertEquals(0, new BigDecimal("50.0").compareTo(result.getBalanceAmount()));
+        assertEquals(0, new BigDecimal("100.0").compareTo(result.getAsankaPaid()));
+        assertEquals(0, BigDecimal.ZERO.compareTo(result.getDivyaPaid()));
+        assertEquals("Divya", result.getWhoOwes());
+    }
+
+    @Test
+    void getMonthlyBalance_DivyaOwesAsanka_ShouldReturnCorrectBalance() {
+        // Given
+        LocalDate startDate = LocalDate.of(2024, 1, 1);
+        LocalDate endDate = LocalDate.of(2024, 1, 31);
+
+        Transaction divyaExpense = createTransaction(2, new BigDecimal("200.00"),
+                LocalDate.of(2024, 1, 15), "Test Store", "Test expense",
+                Transaction.AccountType.DIVYA, Transaction.TransactionType.EXPENSE, divya);
+
+        when(transactionRepository.searchTransactionByDateRangeAccountTypeTransactionType(
+                eq(startDate), eq(endDate),
+                eq(Arrays.asList(Transaction.AccountType.ASANKA, Transaction.AccountType.DIVYA)),
+                eq(Arrays.asList(Transaction.TransactionType.EXPENSE))))
+                .thenReturn(Arrays.asList(divyaExpense));
+
+        when(transactionRepository.searchTransactionByDateRangeAccountTypeTransactionType(
+                any(LocalDate.class), any(LocalDate.class),
+                eq(Arrays.asList(Transaction.AccountType.DIVYA, Transaction.AccountType.ASANKA)),
+                any()))
+                .thenReturn(Collections.emptyList());
+
+        when(transactionRepository.searchTransactionByDateRangeAccountTypeTransactionType(
+                any(LocalDate.class), any(LocalDate.class),
+                eq(Arrays.asList(Transaction.AccountType.CIBC, Transaction.AccountType.AMEX)),
+                eq(Arrays.asList(Transaction.TransactionType.CARDPAYMENT))))
+                .thenReturn(Collections.emptyList());
+
+        // When
+        // Asanka paid $0, Divya paid $200
+        // Asanka's share: $0/2 = $0, Divya's share: $200/2 = $100
+        // Difference: $100 - $0 = $100, so Asanka owes Divya $100
+        MonthlyBalanceResponseDto result = transactionService.getMonthlyBalance(1, 2024);
+
+        // Then
+        assertEquals(0, new BigDecimal("100.0").compareTo(result.getBalanceAmount()));
+        assertEquals(0, BigDecimal.ZERO.compareTo(result.getAsankaPaid()));
+        assertEquals(0, new BigDecimal("200.0").compareTo(result.getDivyaPaid()));
+        assertEquals("Asanka", result.getWhoOwes());
+    }
+
+    @Test
+    void getMonthlyBalance_WithCardPayments_ShouldHandleNegatedAmounts() {
+        // Given
+        Transaction asankaCardPayment = createTransaction(1, new BigDecimal("-100.00"),
+                LocalDate.of(2024, 1, 15), "Card Payment", "Card payment",
+                Transaction.AccountType.CIBC, Transaction.TransactionType.CARDPAYMENT, asanka);
+
+        Transaction divyaCardPayment = createTransaction(2, new BigDecimal("-50.00"),
+                LocalDate.of(2024, 1, 18), "Card Payment", "Card payment",
+                Transaction.AccountType.AMEX, Transaction.TransactionType.CARDPAYMENT, divya);
+
+        when(transactionRepository.searchTransactionByDateRangeAccountTypeTransactionType(
+                any(LocalDate.class), any(LocalDate.class),
+                eq(Arrays.asList(Transaction.AccountType.CIBC, Transaction.AccountType.AMEX)),
+                eq(Arrays.asList(Transaction.TransactionType.CARDPAYMENT))))
+                .thenReturn(Arrays.asList(asankaCardPayment, divyaCardPayment));
+
+        when(transactionRepository.searchTransactionByDateRangeAccountTypeTransactionType(
+                any(LocalDate.class), any(LocalDate.class),
+                eq(Arrays.asList(Transaction.AccountType.ASANKA, Transaction.AccountType.DIVYA)),
+                eq(Arrays.asList(Transaction.TransactionType.EXPENSE))))
+                .thenReturn(Collections.emptyList());
+
+        when(transactionRepository.searchTransactionByDateRangeAccountTypeTransactionType(
+                any(LocalDate.class), any(LocalDate.class),
+                eq(Arrays.asList(Transaction.AccountType.DIVYA, Transaction.AccountType.ASANKA)),
+                any()))
+                .thenReturn(Collections.emptyList());
+
+        // When
+        // Asanka: -$100 (negated card payment), Divya: -$50 (negated card payment)
+        // Asanka's share: $100/2 = $50, Divya's share: $50/2 = $25
+        // Difference: $25 - $50 = -$25, so Divya owes Asanka $25
+        MonthlyBalanceResponseDto result = transactionService.getMonthlyBalance(1, 2024);
+
+        // Then
+        assertEquals(0, new BigDecimal("25.0").compareTo(result.getBalanceAmount()));
+        assertEquals(0, new BigDecimal("100.0").compareTo(result.getAsankaPaid()));
+        assertEquals(0, new BigDecimal("50.0").compareTo(result.getDivyaPaid()));
+        assertEquals("Divya", result.getWhoOwes());
+    }
+
+    @Test
+    void getMonthlyBalance_InvalidMonth_ShouldThrowException() {
+        assertThrows(java.time.DateTimeException.class, () -> transactionService.getMonthlyBalance(13, 2024));
+    }
+
+    private Transaction createTransaction(Integer transactionId, BigDecimal amount, LocalDate date,
+                                        String entity, String details, Transaction.AccountType account,
                                         Transaction.TransactionType transactionType, Person person) {
         Transaction transaction = new Transaction();
         transaction.setTransactionId(transactionId);
