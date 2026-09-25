@@ -127,8 +127,9 @@ public class TransactionService {
 
         MonthlyBalanceResponseDto monthlyBalanceResponseDto = new MonthlyBalanceResponseDto();
         monthlyBalanceResponseDto.setBalanceAmount(difference.abs());
-        monthlyBalanceResponseDto.setAsankaPaid(totalExpensesMinusIncomeAsanka.abs());
-        monthlyBalanceResponseDto.setDivyaPaid(totalExpensesMinusIncomeDivya.abs());
+        // Net contribution: negative when rental income received exceeds what the person paid out.
+        monthlyBalanceResponseDto.setAsankaPaid(totalExpensesMinusIncomeAsanka);
+        monthlyBalanceResponseDto.setDivyaPaid(totalExpensesMinusIncomeDivya);
         monthlyBalanceResponseDto.setMonthAndYear(month + ", " + year);
 
         if (difference.compareTo(BigDecimal.ZERO) > 0) {
@@ -251,10 +252,14 @@ public class TransactionService {
         BigDecimal divyaTotal = BigDecimal.ZERO;
 
         for (Transaction txn : transactions) {
-            if (txn.getPerson().getPersonId() == 1) {
+            Integer personId = txn.getPerson() == null ? null : txn.getPerson().getPersonId();
+            if (Integer.valueOf(1).equals(personId)) {
                 asankaTotal = asankaTotal.add(txn.getAmount().negate());
-            } else if (txn.getPerson().getPersonId() == 2) {
+            } else if (Integer.valueOf(2).equals(personId)) {
                 divyaTotal = divyaTotal.add(txn.getAmount().negate());
+            } else {
+                log.warn("Skipping card payment {} ({} on {}) in monthly balance: no matching person",
+                        txn.getTransactionId(), txn.getAmount(), txn.getDate());
             }
         }
 

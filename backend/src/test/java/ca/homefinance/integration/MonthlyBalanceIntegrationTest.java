@@ -340,7 +340,36 @@ class MonthlyBalanceIntegrationTest {
                 .andExpect(jsonPath("$.whoOwes").value("Asanka"));
     }
 
-    private Transaction createTransaction(BigDecimal amount, LocalDate date, String entity, 
+    @Test
+    void getMonthlyBalance_MonthOutOfRange_ShouldReturnBadRequest() throws Exception {
+        mockMvc.perform(get("/api/v1/transaction/getMonthlyBalance")
+                        .param("month", "13")
+                        .param("year", "2024"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void getMonthlyBalance_CardPaymentWithoutPerson_ShouldNotFail() throws Exception {
+        Transaction asankaExpense = createTransaction(new BigDecimal("100.00"),
+                LocalDate.of(2024, 1, 15), "Store", "Expense",
+                Transaction.AccountType.ASANKA, Transaction.TransactionType.EXPENSE, asanka);
+
+        Transaction orphanCardPayment = createTransaction(new BigDecimal("-250.00"),
+                LocalDate.of(2024, 1, 20), "Card Payment", "Unrecognised card number",
+                Transaction.AccountType.CIBC, Transaction.TransactionType.CARDPAYMENT, null);
+
+        transactionRepository.saveAll(Arrays.asList(asankaExpense, orphanCardPayment));
+
+        mockMvc.perform(get("/api/v1/transaction/getMonthlyBalance")
+                        .param("month", "1")
+                        .param("year", "2024"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.balanceAmount").value("50.0"))
+                .andExpect(jsonPath("$.asankaPaid").value("100.0"))
+                .andExpect(jsonPath("$.whoOwes").value("Divya"));
+    }
+
+    private Transaction createTransaction(BigDecimal amount, LocalDate date, String entity,
                                         String details, Transaction.AccountType account, 
                                         Transaction.TransactionType transactionType, Person person) {
         Transaction transaction = new Transaction();

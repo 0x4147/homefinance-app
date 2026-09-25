@@ -412,6 +412,96 @@ class TransactionServiceTest {
     }
 
     @Test
+    void getMonthlyBalance_CardPaymentWithoutPerson_ShouldBeSkipped() {
+        Transaction asankaCardPayment = createTransaction(1, new BigDecimal("-100.00"),
+                LocalDate.of(2024, 1, 15), "Card Payment", "Card payment",
+                Transaction.AccountType.CIBC, Transaction.TransactionType.CARDPAYMENT, asanka);
+
+        Transaction orphanCardPayment = createTransaction(2, new BigDecimal("-500.00"),
+                LocalDate.of(2024, 1, 16), "Card Payment", "Unknown card",
+                Transaction.AccountType.CIBC, Transaction.TransactionType.CARDPAYMENT, null);
+
+        Person personWithoutId = new Person();
+        Transaction noIdCardPayment = createTransaction(3, new BigDecimal("-300.00"),
+                LocalDate.of(2024, 1, 17), "Card Payment", "Person without id",
+                Transaction.AccountType.AMEX, Transaction.TransactionType.CARDPAYMENT, personWithoutId);
+
+        when(transactionRepository.searchTransactionByDateRangeAccountTypeTransactionType(
+                any(LocalDate.class), any(LocalDate.class),
+                eq(Arrays.asList(Transaction.AccountType.CIBC, Transaction.AccountType.AMEX)),
+                eq(Arrays.asList(Transaction.TransactionType.CARDPAYMENT))))
+                .thenReturn(Arrays.asList(asankaCardPayment, orphanCardPayment, noIdCardPayment));
+
+        when(transactionRepository.searchTransactionByDateRangeAccountTypeTransactionType(
+                any(LocalDate.class), any(LocalDate.class),
+                eq(Arrays.asList(Transaction.AccountType.ASANKA, Transaction.AccountType.DIVYA)),
+                eq(Arrays.asList(Transaction.TransactionType.EXPENSE))))
+                .thenReturn(Collections.emptyList());
+
+        when(transactionRepository.searchTransactionByDateRangeAccountTypeTransactionType(
+                any(LocalDate.class), any(LocalDate.class),
+                eq(Arrays.asList(Transaction.AccountType.DIVYA, Transaction.AccountType.ASANKA)),
+                any()))
+                .thenReturn(Collections.emptyList());
+
+        // Only Asanka's $100 counts; the unattributed payments are skipped rather than crashing
+        MonthlyBalanceResponseDto result = transactionService.getMonthlyBalance(1, 2024);
+
+        assertEquals(0, new BigDecimal("100.00").compareTo(result.getAsankaPaid()));
+        assertEquals(0, BigDecimal.ZERO.compareTo(result.getDivyaPaid()));
+        assertEquals(0, new BigDecimal("50.00").compareTo(result.getBalanceAmount()));
+        assertEquals("Divya", result.getWhoOwes());
+    }
+
+    @Test
+    void getMonthlyBalance_RentalIncomeExceedsExpenses_ShouldReturnNegativeNetContribution() {
+        Transaction asankaExpense = createTransaction(1, new BigDecimal("500.00"),
+                LocalDate.of(2024, 1, 10), "Store", "Expense",
+                Transaction.AccountType.ASANKA, Transaction.TransactionType.EXPENSE, asanka);
+
+        Transaction asankaRent = createTransaction(2, new BigDecimal("2000.00"),
+                LocalDate.of(2024, 1, 1), "Tenant", "Rent",
+                Transaction.AccountType.ASANKA, Transaction.TransactionType.RENTALRENTINCOME, asanka);
+
+        Transaction divyaExpense = createTransaction(3, new BigDecimal("300.00"),
+                LocalDate.of(2024, 1, 12), "Store", "Expense",
+                Transaction.AccountType.DIVYA, Transaction.TransactionType.EXPENSE, divya);
+
+        when(transactionRepository.searchTransactionByDateRangeAccountTypeTransactionType(
+                any(LocalDate.class), any(LocalDate.class),
+                eq(Arrays.asList(Transaction.AccountType.ASANKA, Transaction.AccountType.DIVYA)),
+                eq(Arrays.asList(Transaction.TransactionType.EXPENSE))))
+                .thenReturn(Arrays.asList(asankaExpense, divyaExpense));
+
+        when(transactionRepository.searchTransactionByDateRangeAccountTypeTransactionType(
+                any(LocalDate.class), any(LocalDate.class),
+                eq(Arrays.asList(Transaction.AccountType.DIVYA, Transaction.AccountType.ASANKA)),
+                any()))
+                .thenReturn(Collections.emptyList());
+
+        when(transactionRepository.searchTransactionByDateRangeAccountTypeTransactionType(
+                any(LocalDate.class), any(LocalDate.class),
+                eq(Arrays.asList(Transaction.AccountType.DIVYA, Transaction.AccountType.ASANKA)),
+                eq(Arrays.asList(Transaction.TransactionType.RENTALRENTINCOME))))
+                .thenReturn(Arrays.asList(asankaRent));
+
+        when(transactionRepository.searchTransactionByDateRangeAccountTypeTransactionType(
+                any(LocalDate.class), any(LocalDate.class),
+                eq(Arrays.asList(Transaction.AccountType.CIBC, Transaction.AccountType.AMEX)),
+                eq(Arrays.asList(Transaction.TransactionType.CARDPAYMENT))))
+                .thenReturn(Collections.emptyList());
+
+        // Asanka: $500 - $2000 = -$1500 net, Divya: $300 net
+        // Difference: $150 - (-$750) = $900, so Asanka owes Divya $900
+        MonthlyBalanceResponseDto result = transactionService.getMonthlyBalance(1, 2024);
+
+        assertEquals(0, new BigDecimal("-1500.00").compareTo(result.getAsankaPaid()));
+        assertEquals(0, new BigDecimal("300.00").compareTo(result.getDivyaPaid()));
+        assertEquals(0, new BigDecimal("900.00").compareTo(result.getBalanceAmount()));
+        assertEquals("Asanka", result.getWhoOwes());
+    }
+
+    @Test
     void getMonthlyBalance_InvalidMonth_ShouldThrowException() {
         assertThrows(java.time.DateTimeException.class, () -> transactionService.getMonthlyBalance(13, 2024));
     }

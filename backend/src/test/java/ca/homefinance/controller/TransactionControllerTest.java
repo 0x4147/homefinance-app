@@ -101,6 +101,28 @@ class TransactionControllerTest {
     }
 
     @Test
+    void getMonthlyBalance_MonthOutOfRange_ShouldReturnBadRequest() throws Exception {
+        when(transactionService.getMonthlyBalance(13, 2024))
+                .thenThrow(new java.time.DateTimeException("Invalid value for MonthOfYear: 13"));
+
+        mockMvc.perform(get("/api/v1/transaction/getMonthlyBalance")
+                        .param("month", "13")
+                        .param("year", "2024"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void getMonthlyBalance_MonthZero_ShouldReturnBadRequest() throws Exception {
+        when(transactionService.getMonthlyBalance(0, 2024))
+                .thenThrow(new java.time.DateTimeException("Invalid value for MonthOfYear: 0"));
+
+        mockMvc.perform(get("/api/v1/transaction/getMonthlyBalance")
+                        .param("month", "0")
+                        .param("year", "2024"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
     void getMonthlyBalance_InvalidYear_ShouldReturnBadRequest() throws Exception {
         mockMvc.perform(get("/api/v1/transaction/getMonthlyBalance")
                         .param("month", "1")

@@ -9,6 +9,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.DateTimeException;
 import java.time.LocalDate;
 import java.time.YearMonth;
 import java.util.List;
@@ -39,7 +40,7 @@ public class TransactionController {
     public ResponseEntity<MonthlyBalanceResponseDto> getMonthlyBalance(@RequestParam String month, @RequestParam String year) {
         try {
             return ResponseEntity.ok(transactionService.getMonthlyBalance(Integer.parseInt(month), Integer.parseInt(year)));
-        } catch (NumberFormatException e) {
+        } catch (NumberFormatException | DateTimeException e) {
             return ResponseEntity.badRequest().build();
         }
     }
