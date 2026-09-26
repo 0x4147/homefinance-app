@@ -38,10 +38,12 @@ class TransactionServiceTest {
     void setUp() {
         asanka = new Person();
         asanka.setPersonId(1);
+        asanka.setCode("ASANKA");
         asanka.setName("Asanka");
 
         divya = new Person();
         divya.setPersonId(2);
+        divya.setCode("DIVYA");
         divya.setName("Divya");
     }
 
@@ -450,6 +452,49 @@ class TransactionServiceTest {
         assertEquals(0, new BigDecimal("100.00").compareTo(result.getAsankaPaid()));
         assertEquals(0, BigDecimal.ZERO.compareTo(result.getDivyaPaid()));
         assertEquals(0, new BigDecimal("50.00").compareTo(result.getBalanceAmount()));
+        assertEquals("Divya", result.getWhoOwes());
+    }
+
+    @Test
+    void getMonthlyBalance_CardPaymentAttribution_ShouldUsePersonCodeNotId() {
+        Person asankaWithOtherId = new Person();
+        asankaWithOtherId.setPersonId(42);
+        asankaWithOtherId.setCode("ASANKA");
+
+        Person divyaWithOtherId = new Person();
+        divyaWithOtherId.setPersonId(1); // an ID that used to be treated as Asanka
+        divyaWithOtherId.setCode("DIVYA");
+
+        Transaction asankaCardPayment = createTransaction(1, new BigDecimal("-100.00"),
+                LocalDate.of(2024, 1, 15), "Card Payment", "Card payment",
+                Transaction.AccountType.CIBC, Transaction.TransactionType.CARDPAYMENT, asankaWithOtherId);
+
+        Transaction divyaCardPayment = createTransaction(2, new BigDecimal("-50.00"),
+                LocalDate.of(2024, 1, 18), "Card Payment", "Card payment",
+                Transaction.AccountType.AMEX, Transaction.TransactionType.CARDPAYMENT, divyaWithOtherId);
+
+        when(transactionRepository.searchTransactionByDateRangeAccountTypeTransactionType(
+                any(LocalDate.class), any(LocalDate.class),
+                eq(Arrays.asList(Transaction.AccountType.CIBC, Transaction.AccountType.AMEX)),
+                eq(Arrays.asList(Transaction.TransactionType.CARDPAYMENT))))
+                .thenReturn(Arrays.asList(asankaCardPayment, divyaCardPayment));
+
+        when(transactionRepository.searchTransactionByDateRangeAccountTypeTransactionType(
+                any(LocalDate.class), any(LocalDate.class),
+                eq(Arrays.asList(Transaction.AccountType.ASANKA, Transaction.AccountType.DIVYA)),
+                any()))
+                .thenReturn(Collections.emptyList());
+
+        when(transactionRepository.searchTransactionByDateRangeAccountTypeTransactionType(
+                any(LocalDate.class), any(LocalDate.class),
+                eq(Arrays.asList(Transaction.AccountType.DIVYA, Transaction.AccountType.ASANKA)),
+                any()))
+                .thenReturn(Collections.emptyList());
+
+        MonthlyBalanceResponseDto result = transactionService.getMonthlyBalance(1, 2024);
+
+        assertEquals(0, new BigDecimal("100.00").compareTo(result.getAsankaPaid()));
+        assertEquals(0, new BigDecimal("50.00").compareTo(result.getDivyaPaid()));
         assertEquals("Divya", result.getWhoOwes());
     }
 

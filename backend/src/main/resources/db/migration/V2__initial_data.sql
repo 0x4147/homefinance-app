@@ -1,7 +1,7 @@
-INSERT INTO Person (name, email)
+INSERT INTO Person (code, name, email)
 VALUES
-    ('Asanka', 'asanka.nz@gmail.com'),
-    ('Divya', 'divyamehta.nz@gmail.com');
+    ('ASANKA', 'Asanka', 'asanka.nz@gmail.com'),
+    ('DIVYA', 'Divya', 'divyamehta.nz@gmail.com');
 
 INSERT INTO Category (name, type)
 VALUES

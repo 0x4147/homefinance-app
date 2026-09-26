@@ -62,11 +62,13 @@ class MonthlyBalanceIntegrationTest {
 
         // Create test persons
         asanka = new Person();
+        asanka.setCode("ASANKA");
         asanka.setName("Asanka");
         asanka.setEmail("asanka@test.com");
         asanka = personRepository.save(asanka);
 
         divya = new Person();
+        divya.setCode("DIVYA");
         divya.setName("Divya");
         divya.setEmail("divya@test.com");
         divya = personRepository.save(divya);

@@ -36,10 +36,12 @@ class MonthlyBalanceValidationTest {
     void setUp() {
         asanka = new Person();
         asanka.setPersonId(1);
+        asanka.setCode("ASANKA");
         asanka.setName("Asanka");
 
         divya = new Person();
         divya.setPersonId(2);
+        divya.setCode("DIVYA");
         divya.setName("Divya");
     }
 

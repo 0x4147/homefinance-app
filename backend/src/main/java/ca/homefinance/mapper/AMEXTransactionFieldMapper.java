@@ -89,17 +89,17 @@ public class AMEXTransactionFieldMapper implements FieldSetMapper<Transaction> {
             String person = fieldSet.readString("person").trim();
             logger.debug("Person from field set: {}", person);
             if (person == null || person.isEmpty()){
-                logger.debug("Person is null or empty, setting to default (ID: 2)");
-                transaction.setPerson(personRepository.findById(2).get());
+                logger.debug("Person is null or empty, setting to default");
+                transaction.setPerson(personRepository.findByCode(Transaction.AccountType.DIVYA.name()).orElseThrow());
             }
             else {
                 if(person.contains("DIVYA")) {
-                    logger.debug("Person contains 'DIVYA', setting to Divya (ID: 2)");
-                    transaction.setPerson(personRepository.findById(2).get()); //Divya
+                    logger.debug("Person contains 'DIVYA', setting to Divya");
+                    transaction.setPerson(personRepository.findByCode(Transaction.AccountType.DIVYA.name()).orElseThrow()); //Divya
                 }
                 if(person.contains("ASANKA")) {
-                    logger.debug("Person contains 'ASANKA', setting to Asanka (ID: 1)");
-                    transaction.setPerson(personRepository.findById(1).get()); //Asanka
+                    logger.debug("Person contains 'ASANKA', setting to Asanka");
+                    transaction.setPerson(personRepository.findByCode(Transaction.AccountType.ASANKA.name()).orElseThrow()); //Asanka
                 }
             }
 

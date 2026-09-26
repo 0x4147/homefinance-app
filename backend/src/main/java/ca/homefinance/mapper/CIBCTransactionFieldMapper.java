@@ -85,12 +85,12 @@ public class CIBCTransactionFieldMapper implements FieldSetMapper<Transaction> {
             String person = fieldSet.readString("person").trim();
             logger.debug("Person from field set: {}", person);
             if(person.equals("5223********3406")) {
-                logger.debug("Person matches Divya's card, setting to Divya (ID: 2)");
-                transaction.setPerson(personRepository.findById(2).get()); //Divya
+                logger.debug("Person matches Divya's card, setting to Divya");
+                transaction.setPerson(personRepository.findByCode(Transaction.AccountType.DIVYA.name()).orElseThrow()); //Divya
             }
             if(person.equals("5223********5844")) {
-                logger.debug("Person matches Asanka's card, setting to Asanka (ID: 1)");
-                transaction.setPerson(personRepository.findById(1).get()); //Asanka
+                logger.debug("Person matches Asanka's card, setting to Asanka");
+                transaction.setPerson(personRepository.findByCode(Transaction.AccountType.ASANKA.name()).orElseThrow()); //Asanka
             }
 
             logger.debug("Successfully mapped CIBC transaction: {}", transaction);

@@ -1,6 +1,7 @@
 -- Table for storing people (users) who can be involved in income and expenses
 CREATE TABLE Person (
     person_id INT AUTO_INCREMENT PRIMARY KEY,
+    code VARCHAR(20) NOT NULL UNIQUE, -- Stable identifier used by business logic (matches Transaction account names, e.g. ASANKA)
     name VARCHAR(255) NOT NULL,
     email VARCHAR(255) UNIQUE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP

@@ -252,10 +252,10 @@ public class TransactionService {
         BigDecimal divyaTotal = BigDecimal.ZERO;
 
         for (Transaction txn : transactions) {
-            Integer personId = txn.getPerson() == null ? null : txn.getPerson().getPersonId();
-            if (Integer.valueOf(1).equals(personId)) {
+            String personCode = txn.getPerson() == null ? null : txn.getPerson().getCode();
+            if (Transaction.AccountType.ASANKA.name().equals(personCode)) {
                 asankaTotal = asankaTotal.add(txn.getAmount().negate());
-            } else if (Integer.valueOf(2).equals(personId)) {
+            } else if (Transaction.AccountType.DIVYA.name().equals(personCode)) {
                 divyaTotal = divyaTotal.add(txn.getAmount().negate());
             } else {
                 log.warn("Skipping card payment {} ({} on {}) in monthly balance: no matching person",
