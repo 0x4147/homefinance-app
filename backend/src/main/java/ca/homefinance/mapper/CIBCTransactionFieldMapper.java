@@ -1,10 +1,11 @@
 package ca.homefinance.mapper;
 
 import ca.homefinance.entity.Category;
+import ca.homefinance.entity.PersonCard;
 import ca.homefinance.entity.Transaction;
 import ca.homefinance.helper.GeneralHelper;
 import ca.homefinance.helper.TransactionCategorizer;
-import ca.homefinance.repository.PersonRepository;
+import ca.homefinance.repository.PersonCardRepository;
 import ca.homefinance.service.TransactionCategorizationService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -23,13 +24,13 @@ public class CIBCTransactionFieldMapper implements FieldSetMapper<Transaction> {
     private static final Logger logger = LoggerFactory.getLogger(CIBCTransactionFieldMapper.class);
 
     private final TransactionCategorizer categorizer;
-    private final PersonRepository personRepository;
+    private final PersonCardRepository personCardRepository;
     private final TransactionCategorizationService transactionCategorizationService;
 
     @Autowired
-    public CIBCTransactionFieldMapper(TransactionCategorizer categorizer, PersonRepository personRepository, TransactionCategorizationService transactionCategorizationService) {
+    public CIBCTransactionFieldMapper(TransactionCategorizer categorizer, PersonCardRepository personCardRepository, TransactionCategorizationService transactionCategorizationService) {
         this.categorizer = categorizer;
-        this.personRepository = personRepository;
+        this.personCardRepository = personCardRepository;
         this.transactionCategorizationService = transactionCategorizationService;
     }
 
@@ -84,14 +85,16 @@ public class CIBCTransactionFieldMapper implements FieldSetMapper<Transaction> {
 
             String person = fieldSet.readString("person").trim();
             logger.debug("Person from field set: {}", person);
-            if(person.equals("5223********3406")) {
-                logger.debug("Person matches Divya's card, setting to Divya");
-                transaction.setPerson(personRepository.findByCode(Transaction.AccountType.DIVYA.name()).orElseThrow()); //Divya
-            }
-            if(person.equals("5223********5844")) {
-                logger.debug("Person matches Asanka's card, setting to Asanka");
-                transaction.setPerson(personRepository.findByCode(Transaction.AccountType.ASANKA.name()).orElseThrow()); //Asanka
-            }
+            personCardRepository.findByCardIdentifier(person)
+                    .map(PersonCard::getPerson)
+                    .ifPresentOrElse(
+                            cardHolder -> {
+                                logger.debug("Card {} belongs to {}", person, cardHolder.getCode());
+                                transaction.setPerson(cardHolder);
+                            },
+                            () -> logger.warn("No person registered for card '{}' (entity: {}, date: {}); "
+                                            + "transaction imported without a person and excluded from the monthly balance",
+                                    person, transaction.getEntity(), transaction.getDate()));
 
             logger.debug("Successfully mapped CIBC transaction: {}", transaction);
             return transaction;

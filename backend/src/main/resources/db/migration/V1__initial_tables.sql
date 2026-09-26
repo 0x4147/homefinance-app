@@ -57,6 +57,15 @@ CREATE TABLE Receipt (
 );
 
 -- Table to track payments between people (for shared expenses or income)
+-- Cards (as identified in bank exports, e.g. a masked card number) mapped to the person who holds them
+CREATE TABLE PersonCard (
+    person_card_id INT AUTO_INCREMENT PRIMARY KEY,
+    person_id INT NOT NULL,
+    card_identifier VARCHAR(50) NOT NULL UNIQUE, -- Value exactly as it appears in the export, e.g. 5223********5844
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (person_id) REFERENCES Person(person_id) ON DELETE CASCADE
+);
+
 CREATE TABLE Payment (
     payment_id INT AUTO_INCREMENT PRIMARY KEY,
     amount DECIMAL(10, 2) NOT NULL,
@@ -76,6 +85,7 @@ CREATE INDEX idx_transaction_category_id ON `Transaction`(category_id);
 CREATE INDEX idx_transaction_person_id ON `Transaction`(person_id);
 CREATE INDEX idx_transaction_uncat_id ON `Transaction`(uncategorized_transaction_id);
 CREATE INDEX idx_receipt_transaction_id ON Receipt(transaction_id);
+CREATE INDEX idx_person_card_person_id ON PersonCard(person_id);
 CREATE INDEX idx_payment_from_person_id ON Payment(from_person_id);
 CREATE INDEX idx_payment_to_person_id ON Payment(to_person_id);
 CREATE INDEX idx_payment_transaction_id ON Payment(transaction_id);

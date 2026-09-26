@@ -27,3 +27,10 @@ VALUES
     ('Clothing', 'EXPENSE');
 
 
+
+
+INSERT INTO PersonCard (person_id, card_identifier)
+SELECT person_id, '5223********5844' FROM Person WHERE code = 'ASANKA';
+
+INSERT INTO PersonCard (person_id, card_identifier)
+SELECT person_id, '5223********3406' FROM Person WHERE code = 'DIVYA';
