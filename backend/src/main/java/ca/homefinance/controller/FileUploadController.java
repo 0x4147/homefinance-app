@@ -4,6 +4,8 @@ package ca.homefinance.batch;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.batch.core.Job;
+import org.springframework.batch.core.JobExecution;
+import org.springframework.batch.core.StepExecution;
 import org.springframework.batch.core.JobParameters;
 import org.springframework.batch.core.JobParametersBuilder;
 import org.springframework.batch.core.launch.JobLauncher;
@@ -99,10 +101,20 @@ public class FileUploadController {
 
             // Launch batch job
             logger.info("Launching batch job");
-            jobLauncher.run(transactionJob, params);
-            logger.info("Batch job launched successfully");
+            JobExecution jobExecution = jobLauncher.run(transactionJob, params);
+            long imported = jobExecution.getStepExecutions().stream().mapToLong(StepExecution::getWriteCount).sum();
+            long duplicates = jobExecution.getStepExecutions().stream().mapToLong(StepExecution::getFilterCount).sum();
+            logger.info("Import finished with status {} - imported: {}, duplicates skipped: {}",
+                    jobExecution.getStatus(), imported, duplicates);
 
-            return ResponseEntity.ok("Batch job triggered for file: " + originalFilename);
+            if (jobExecution.getStatus().isUnsuccessful()) {
+                return ResponseEntity.internalServerError()
+                        .body("Import of " + originalFilename + " failed with status " + jobExecution.getStatus());
+            }
+
+            return ResponseEntity.ok("Imported " + imported + " transactions from " + originalFilename
+                    + " (" + duplicates + " duplicates skipped)");
+
 
         } catch (Exception e) {
             logger.error("Error during file upload processing", e);

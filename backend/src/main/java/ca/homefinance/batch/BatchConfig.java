@@ -3,6 +3,7 @@ package ca.homefinance.batch;
 import ca.homefinance.entity.Transaction;
 import ca.homefinance.mapper.AMEXTransactionFieldMapper;
 import ca.homefinance.mapper.CIBCTransactionFieldMapper;
+import ca.homefinance.repository.TransactionRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.batch.core.Job;
@@ -30,14 +31,17 @@ public class BatchConfig {
     private static final Logger logger = LoggerFactory.getLogger(BatchConfig.class);
 
     private final TransactionWriter writer;
+    private final TransactionRepository transactionRepository;
     private final CIBCTransactionFieldMapper cibcTransactionFieldMapper;
     private final AMEXTransactionFieldMapper amexTransactionFieldMapper;
 
     @Autowired
     public BatchConfig (TransactionWriter writer,
+                        TransactionRepository transactionRepository,
                         CIBCTransactionFieldMapper cibcTransactionFieldMapper,
                         AMEXTransactionFieldMapper amexTransactionFieldMapper){
         this.writer = writer;
+        this.transactionRepository = transactionRepository;
         this.cibcTransactionFieldMapper = cibcTransactionFieldMapper;
         this.amexTransactionFieldMapper = amexTransactionFieldMapper;
     }
@@ -58,8 +62,15 @@ public class BatchConfig {
         return new StepBuilder("importTransactions", jobRepository)
                 .<Transaction, Transaction>chunk(10, transactionManager)
                 .reader(csvFileReader(null, null)) // Let Spring inject the value
+                .processor(duplicateTransactionFilter())
                 .writer(writer)
                 .build();
+    }
+
+    @StepScope
+    @Bean
+    public DuplicateTransactionFilter duplicateTransactionFilter() {
+        return new DuplicateTransactionFilter(transactionRepository);
     }
 
     @StepScope

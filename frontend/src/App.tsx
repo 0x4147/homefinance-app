@@ -486,7 +486,7 @@ const AddBulkTransactions = () => {
             
             const result = await apiService.uploadTransactionFile(selectedFile, sourceType);
             log.info('File upload successful:', result);
-            alert(`Successfully uploaded ${selectedFile.name} for ${selectedBank} transactions`);
+            alert(result || `Successfully uploaded ${selectedFile.name} for ${selectedBank} transactions`);
             
             // Reset form
             log.info('Resetting form after successful upload');

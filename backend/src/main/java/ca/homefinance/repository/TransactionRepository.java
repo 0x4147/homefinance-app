@@ -5,6 +5,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 import org.springframework.data.jpa.repository.JpaRepository;
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 
@@ -14,6 +15,8 @@ public interface TransactionRepository extends JpaRepository<Transaction, Intege
     List<Transaction> findByDateBetween(LocalDate startDate, LocalDate endDate);
 
     List<Transaction> findByUncategorizedTransaction_Id(Integer id);
+
+    long countByAccountAndDateAndEntityAndAmount(Transaction.AccountType account, LocalDate date, String entity, BigDecimal amount);
 
     @Query("SELECT t FROM Transaction t WHERE " +
             "(:startDate IS NULL OR :endDate IS NULL OR t.date BETWEEN :startDate AND :endDate) AND " +
