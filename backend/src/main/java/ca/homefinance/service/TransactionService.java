@@ -82,10 +82,15 @@ public class TransactionService {
                 Arrays.asList(Transaction.AccountType.ASANKA, Transaction.AccountType.DIVYA),
                 Arrays.asList(Transaction.TransactionType.EXPENSE));
 
-        List<Transaction> cardPayments = searchTransactionByDateRangeAccountTypeTransactionType(
+        // CIBC and AMEX hold shared/common purchases only, regardless of whose physical card was used,
+        // so every purchase (and its refunds) counts toward the shared pool - not just the CARDPAYMENT
+        // rows, which merely record when the bill happens to get paid and lag behind the spending by a
+        // billing cycle. Divya settles both cards in full every month, so the net amount is her
+        // contribution to the pool.
+        List<Transaction> cardSpending = searchTransactionByDateRangeAccountTypeTransactionType(
                 startDate, endDate,
                 Arrays.asList(Transaction.AccountType.CIBC, Transaction.AccountType.AMEX),
-                Arrays.asList(Transaction.TransactionType.CARDPAYMENT));
+                Arrays.asList(Transaction.TransactionType.EXPENSE, Transaction.TransactionType.REFUND));
 
         List<Transaction> rentalBillIncome = searchTransactionByDateRangeAccountTypeTransactionType(
                 startDate, endDate,
@@ -103,20 +108,21 @@ public class TransactionService {
                 Arrays.asList(Transaction.TransactionType.BILL));
 
         BigDecimal[] expenseTotals = splitByAccount(expenses);
-        BigDecimal[] cardPaymentTotals = splitCardPaymentsByPerson(cardPayments);
+        BigDecimal cardSpendingNet = cardSpending.stream()
+                .map(Transaction::getAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
         BigDecimal[] rentalBillTotals = splitByAccount(rentalBillIncome);
         BigDecimal[] rentalRentTotals = splitByAccount(rentalRentIncome);
         BigDecimal[] billTotals = splitByAccount(billsPaid);
 
         BigDecimal totalExpensesMinusIncomeAsanka = expenseTotals[0]
-                .add(cardPaymentTotals[0])
                 .add(billTotals[0])
                 .subtract(rentalBillTotals[0])
                 .subtract(rentalRentTotals[0]);
 
         BigDecimal totalExpensesMinusIncomeDivya = expenseTotals[1]
-                .add(cardPaymentTotals[1])
                 .add(billTotals[1])
+                .add(cardSpendingNet)
                 .subtract(rentalBillTotals[1])
                 .subtract(rentalRentTotals[1]);
 
@@ -241,25 +247,6 @@ public class TransactionService {
                 asankaTotal = asankaTotal.add(txn.getAmount());
             } else if (txn.getAccount() == Transaction.AccountType.DIVYA) {
                 divyaTotal = divyaTotal.add(txn.getAmount());
-            }
-        }
-
-        return new BigDecimal[]{asankaTotal, divyaTotal};
-    }
-
-    private static BigDecimal[] splitCardPaymentsByPerson(List<Transaction> transactions) {
-        BigDecimal asankaTotal = BigDecimal.ZERO;
-        BigDecimal divyaTotal = BigDecimal.ZERO;
-
-        for (Transaction txn : transactions) {
-            String personCode = txn.getPerson() == null ? null : txn.getPerson().getCode();
-            if (Transaction.AccountType.ASANKA.name().equals(personCode)) {
-                asankaTotal = asankaTotal.add(txn.getAmount().negate());
-            } else if (Transaction.AccountType.DIVYA.name().equals(personCode)) {
-                divyaTotal = divyaTotal.add(txn.getAmount().negate());
-            } else {
-                log.warn("Skipping card payment {} ({} on {}) in monthly balance: no matching person",
-                        txn.getTransactionId(), txn.getAmount(), txn.getDate());
             }
         }
 

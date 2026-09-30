@@ -94,10 +94,12 @@ class MonthlyBalanceIntegrationTest {
                 january2024.plusDays(5), "Gas Station", "Fuel", 
                 Transaction.AccountType.ASANKA, Transaction.TransactionType.EXPENSE, asanka);
         
-        Transaction asankaCardPayment = createTransaction(new BigDecimal("-200.00"),
-                january2024.plusDays(10), "Card Payment", "Credit card payment", 
-                Transaction.AccountType.CIBC, Transaction.TransactionType.CARDPAYMENT, asanka);
-        
+        // CIBC/AMEX hold shared purchases only (both cards); Divya settles both in full each month,
+        // so every card purchase counts toward her contribution regardless of whose card made it.
+        Transaction asankaCardPurchase = createTransaction(new BigDecimal("200.00"),
+                january2024.plusDays(10), "Costco", "Shared purchase on Asanka's CIBC card",
+                Transaction.AccountType.CIBC, Transaction.TransactionType.EXPENSE, asanka);
+
         Transaction asankaBill = createTransaction(new BigDecimal("85.30"), 
                 january2024.plusDays(15), "Electric Company", "Electric bill", 
                 Transaction.AccountType.ASANKA, Transaction.TransactionType.BILL, asanka);
@@ -115,10 +117,10 @@ class MonthlyBalanceIntegrationTest {
                 january2024.plusDays(8), "Coffee Shop", "Coffee", 
                 Transaction.AccountType.DIVYA, Transaction.TransactionType.EXPENSE, divya);
         
-        Transaction divyaCardPayment = createTransaction(new BigDecimal("-150.00"),
-                january2024.plusDays(12), "Card Payment", "Credit card payment", 
-                Transaction.AccountType.AMEX, Transaction.TransactionType.CARDPAYMENT, divya);
-        
+        Transaction divyaCardPurchase = createTransaction(new BigDecimal("150.00"),
+                january2024.plusDays(12), "Amazon.ca", "Shared purchase on Divya's AMEX card",
+                Transaction.AccountType.AMEX, Transaction.TransactionType.EXPENSE, divya);
+
         Transaction divyaBill = createTransaction(new BigDecimal("60.25"), 
                 january2024.plusDays(18), "Internet Provider", "Internet bill", 
                 Transaction.AccountType.DIVYA, Transaction.TransactionType.BILL, divya);
@@ -129,28 +131,29 @@ class MonthlyBalanceIntegrationTest {
 
         // Save all transactions
         transactionRepository.saveAll(java.util.Arrays.asList(
-                asankaExpense1, asankaExpense2, asankaCardPayment, asankaBill, asankaRentalIncome,
-                divyaExpense1, divyaExpense2, divyaCardPayment, divyaBill, divyaRentalIncome
+                asankaExpense1, asankaExpense2, asankaCardPurchase, asankaBill, asankaRentalIncome,
+                divyaExpense1, divyaExpense2, divyaCardPurchase, divyaBill, divyaRentalIncome
         ));
 
         // When & Then
         // Expected calculations:
-        // Asanka: $120.50 + $45.00 + $200.00 + $85.30 - $50.00 = $400.80
-        // Divya: $95.75 + $30.00 + $150.00 + $60.25 - $75.00 = $261.00
-        // Asanka's share: $400.80/2 = $200.40
-        // Divya's share: $261.00/2 = $130.50
-        // Difference: $130.50 - $200.40 = -$69.90, so Divya owes Asanka $69.90
+        // Asanka: $120.50 + $45.00 + $85.30 - $50.00 = $200.80 (no card component; card purchases go to Divya)
+        // Shared card spend (both cards, either person's card): $200.00 + $150.00 = $350.00
+        // Divya: $95.75 + $30.00 + $60.25 - $75.00 + $350.00 = $461.00
+        // Asanka's share: $200.80/2 = $100.40
+        // Divya's share: $461.00/2 = $230.50
+        // Difference: $230.50 - $100.40 = $130.10, so Asanka owes Divya $130.10
 
         mockMvc.perform(get("/api/v1/transaction/getMonthlyBalance")
                         .param("month", "1")
                         .param("year", "2024")
                         .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.balanceAmount").value("69.9"))
-                .andExpect(jsonPath("$.asankaPaid").value("400.8"))
-                .andExpect(jsonPath("$.divyaPaid").value("261.0"))
+                .andExpect(jsonPath("$.balanceAmount").value("130.1"))
+                .andExpect(jsonPath("$.asankaPaid").value("200.8"))
+                .andExpect(jsonPath("$.divyaPaid").value("461.0"))
                 .andExpect(jsonPath("$.monthAndYear").value("1, 2024"))
-                .andExpect(jsonPath("$.whoOwes").value("Divya"));
+                .andExpect(jsonPath("$.whoOwes").value("Asanka"));
     }
 
     @Test

@@ -314,7 +314,7 @@ class TransactionServiceTest {
         when(transactionRepository.searchTransactionByDateRangeAccountTypeTransactionType(
                 any(LocalDate.class), any(LocalDate.class),
                 eq(Arrays.asList(Transaction.AccountType.CIBC, Transaction.AccountType.AMEX)),
-                eq(Arrays.asList(Transaction.TransactionType.CARDPAYMENT))))
+                eq(Arrays.asList(Transaction.TransactionType.EXPENSE, Transaction.TransactionType.REFUND))))
                 .thenReturn(Collections.emptyList());
 
         // When
@@ -355,7 +355,7 @@ class TransactionServiceTest {
         when(transactionRepository.searchTransactionByDateRangeAccountTypeTransactionType(
                 any(LocalDate.class), any(LocalDate.class),
                 eq(Arrays.asList(Transaction.AccountType.CIBC, Transaction.AccountType.AMEX)),
-                eq(Arrays.asList(Transaction.TransactionType.CARDPAYMENT))))
+                eq(Arrays.asList(Transaction.TransactionType.EXPENSE, Transaction.TransactionType.REFUND))))
                 .thenReturn(Collections.emptyList());
 
         // When
@@ -372,21 +372,22 @@ class TransactionServiceTest {
     }
 
     @Test
-    void getMonthlyBalance_WithCardPayments_ShouldHandleNegatedAmounts() {
-        // Given
-        Transaction asankaCardPayment = createTransaction(1, new BigDecimal("-100.00"),
-                LocalDate.of(2024, 1, 15), "Card Payment", "Card payment",
-                Transaction.AccountType.CIBC, Transaction.TransactionType.CARDPAYMENT, asanka);
+    void getMonthlyBalance_CardPurchases_ShouldCountFullyTowardDivyaRegardlessOfWhoseCardWasUsed() {
+        // Given - CIBC/AMEX hold shared purchases only; Divya settles both cards in full each month,
+        // so every purchase counts as her contribution no matter whose physical card made it.
+        Transaction asankaCardPurchase = createTransaction(1, new BigDecimal("100.00"),
+                LocalDate.of(2024, 1, 15), "Costco", "Groceries",
+                Transaction.AccountType.CIBC, Transaction.TransactionType.EXPENSE, asanka);
 
-        Transaction divyaCardPayment = createTransaction(2, new BigDecimal("-50.00"),
-                LocalDate.of(2024, 1, 18), "Card Payment", "Card payment",
-                Transaction.AccountType.AMEX, Transaction.TransactionType.CARDPAYMENT, divya);
+        Transaction divyaCardPurchase = createTransaction(2, new BigDecimal("50.00"),
+                LocalDate.of(2024, 1, 18), "Tim Hortons", "Coffee",
+                Transaction.AccountType.AMEX, Transaction.TransactionType.EXPENSE, divya);
 
         when(transactionRepository.searchTransactionByDateRangeAccountTypeTransactionType(
                 any(LocalDate.class), any(LocalDate.class),
                 eq(Arrays.asList(Transaction.AccountType.CIBC, Transaction.AccountType.AMEX)),
-                eq(Arrays.asList(Transaction.TransactionType.CARDPAYMENT))))
-                .thenReturn(Arrays.asList(asankaCardPayment, divyaCardPayment));
+                eq(Arrays.asList(Transaction.TransactionType.EXPENSE, Transaction.TransactionType.REFUND))))
+                .thenReturn(Arrays.asList(asankaCardPurchase, divyaCardPurchase));
 
         when(transactionRepository.searchTransactionByDateRangeAccountTypeTransactionType(
                 any(LocalDate.class), any(LocalDate.class),
@@ -401,38 +402,33 @@ class TransactionServiceTest {
                 .thenReturn(Collections.emptyList());
 
         // When
-        // Asanka: -$100 (negated card payment), Divya: -$50 (negated card payment)
-        // Asanka's share: $100/2 = $50, Divya's share: $50/2 = $25
-        // Difference: $25 - $50 = -$25, so Divya owes Asanka $25
+        // Shared card spend: $100 + $50 = $150, all counted as Divya's contribution
+        // Asanka's share: $0/2 = $0, Divya's share: $150/2 = $75
+        // Difference: $75 - $0 = $75, so Asanka owes Divya $75
         MonthlyBalanceResponseDto result = transactionService.getMonthlyBalance(1, 2024);
 
         // Then
-        assertEquals(0, new BigDecimal("25.0").compareTo(result.getBalanceAmount()));
-        assertEquals(0, new BigDecimal("100.0").compareTo(result.getAsankaPaid()));
-        assertEquals(0, new BigDecimal("50.0").compareTo(result.getDivyaPaid()));
-        assertEquals("Divya", result.getWhoOwes());
+        assertEquals(0, new BigDecimal("75.0").compareTo(result.getBalanceAmount()));
+        assertEquals(0, BigDecimal.ZERO.compareTo(result.getAsankaPaid()));
+        assertEquals(0, new BigDecimal("150.0").compareTo(result.getDivyaPaid()));
+        assertEquals("Asanka", result.getWhoOwes());
     }
 
     @Test
-    void getMonthlyBalance_CardPaymentWithoutPerson_ShouldBeSkipped() {
-        Transaction asankaCardPayment = createTransaction(1, new BigDecimal("-100.00"),
-                LocalDate.of(2024, 1, 15), "Card Payment", "Card payment",
-                Transaction.AccountType.CIBC, Transaction.TransactionType.CARDPAYMENT, asanka);
+    void getMonthlyBalance_CardRefund_ShouldReduceSharedCardSpend() {
+        Transaction cardPurchase = createTransaction(1, new BigDecimal("200.00"),
+                LocalDate.of(2024, 1, 10), "Canadian Tire", "Purchase",
+                Transaction.AccountType.CIBC, Transaction.TransactionType.EXPENSE, asanka);
 
-        Transaction orphanCardPayment = createTransaction(2, new BigDecimal("-500.00"),
-                LocalDate.of(2024, 1, 16), "Card Payment", "Unknown card",
-                Transaction.AccountType.CIBC, Transaction.TransactionType.CARDPAYMENT, null);
-
-        Person personWithoutId = new Person();
-        Transaction noIdCardPayment = createTransaction(3, new BigDecimal("-300.00"),
-                LocalDate.of(2024, 1, 17), "Card Payment", "Person without id",
-                Transaction.AccountType.AMEX, Transaction.TransactionType.CARDPAYMENT, personWithoutId);
+        Transaction cardRefund = createTransaction(2, new BigDecimal("-49.46"),
+                LocalDate.of(2024, 1, 21), "Canadian Tire", "Return",
+                Transaction.AccountType.CIBC, Transaction.TransactionType.REFUND, null);
 
         when(transactionRepository.searchTransactionByDateRangeAccountTypeTransactionType(
                 any(LocalDate.class), any(LocalDate.class),
                 eq(Arrays.asList(Transaction.AccountType.CIBC, Transaction.AccountType.AMEX)),
-                eq(Arrays.asList(Transaction.TransactionType.CARDPAYMENT))))
-                .thenReturn(Arrays.asList(asankaCardPayment, orphanCardPayment, noIdCardPayment));
+                eq(Arrays.asList(Transaction.TransactionType.EXPENSE, Transaction.TransactionType.REFUND))))
+                .thenReturn(Arrays.asList(cardPurchase, cardRefund));
 
         when(transactionRepository.searchTransactionByDateRangeAccountTypeTransactionType(
                 any(LocalDate.class), any(LocalDate.class),
@@ -446,43 +442,32 @@ class TransactionServiceTest {
                 any()))
                 .thenReturn(Collections.emptyList());
 
-        // Only Asanka's $100 counts; the unattributed payments are skipped rather than crashing
+        // Net shared card spend: $200 - $49.46 = $150.54, all counted as Divya's contribution
         MonthlyBalanceResponseDto result = transactionService.getMonthlyBalance(1, 2024);
 
-        assertEquals(0, new BigDecimal("100.00").compareTo(result.getAsankaPaid()));
-        assertEquals(0, BigDecimal.ZERO.compareTo(result.getDivyaPaid()));
-        assertEquals(0, new BigDecimal("50.00").compareTo(result.getBalanceAmount()));
-        assertEquals("Divya", result.getWhoOwes());
+        assertEquals(0, new BigDecimal("150.54").compareTo(result.getDivyaPaid()));
+        assertEquals(0, BigDecimal.ZERO.compareTo(result.getAsankaPaid()));
+        assertEquals("Asanka", result.getWhoOwes());
     }
 
     @Test
-    void getMonthlyBalance_CardPaymentAttribution_ShouldUsePersonCodeNotId() {
-        Person asankaWithOtherId = new Person();
-        asankaWithOtherId.setPersonId(42);
-        asankaWithOtherId.setCode("ASANKA");
-
-        Person divyaWithOtherId = new Person();
-        divyaWithOtherId.setPersonId(1); // an ID that used to be treated as Asanka
-        divyaWithOtherId.setCode("DIVYA");
-
-        Transaction asankaCardPayment = createTransaction(1, new BigDecimal("-100.00"),
-                LocalDate.of(2024, 1, 15), "Card Payment", "Card payment",
-                Transaction.AccountType.CIBC, Transaction.TransactionType.CARDPAYMENT, asankaWithOtherId);
-
-        Transaction divyaCardPayment = createTransaction(2, new BigDecimal("-50.00"),
-                LocalDate.of(2024, 1, 18), "Card Payment", "Card payment",
-                Transaction.AccountType.AMEX, Transaction.TransactionType.CARDPAYMENT, divyaWithOtherId);
+    void getMonthlyBalance_CardPaymentTransactionType_ShouldBeExcludedFromBalance() {
+        // Given - CARDPAYMENT rows only record bank repayment timing (a billing-cycle behind actual
+        // spending), so they must never feed into the balance; only EXPENSE/REFUND does.
+        Transaction cardBillPayment = createTransaction(1, new BigDecimal("-5861.69"),
+                LocalDate.of(2024, 1, 4), "PAYMENT RECEIVED - THANK YOU", "Bill payment",
+                Transaction.AccountType.AMEX, Transaction.TransactionType.CARDPAYMENT, divya);
 
         when(transactionRepository.searchTransactionByDateRangeAccountTypeTransactionType(
                 any(LocalDate.class), any(LocalDate.class),
                 eq(Arrays.asList(Transaction.AccountType.CIBC, Transaction.AccountType.AMEX)),
-                eq(Arrays.asList(Transaction.TransactionType.CARDPAYMENT))))
-                .thenReturn(Arrays.asList(asankaCardPayment, divyaCardPayment));
+                eq(Arrays.asList(Transaction.TransactionType.EXPENSE, Transaction.TransactionType.REFUND))))
+                .thenReturn(Collections.emptyList());
 
         when(transactionRepository.searchTransactionByDateRangeAccountTypeTransactionType(
                 any(LocalDate.class), any(LocalDate.class),
                 eq(Arrays.asList(Transaction.AccountType.ASANKA, Transaction.AccountType.DIVYA)),
-                any()))
+                eq(Arrays.asList(Transaction.TransactionType.EXPENSE))))
                 .thenReturn(Collections.emptyList());
 
         when(transactionRepository.searchTransactionByDateRangeAccountTypeTransactionType(
@@ -491,11 +476,16 @@ class TransactionServiceTest {
                 any()))
                 .thenReturn(Collections.emptyList());
 
+        // A CARDPAYMENT-typed transaction is never requested from the repository at all, since the
+        // service no longer queries that type; if it were mistakenly returned by a broader query, it
+        // still shouldn't be counted (the mock above only returns EXPENSE/REFUND rows, so this asserts
+        // the balance ignores a $5,861.69 payment entirely).
+        assertNotNull(cardBillPayment);
         MonthlyBalanceResponseDto result = transactionService.getMonthlyBalance(1, 2024);
 
-        assertEquals(0, new BigDecimal("100.00").compareTo(result.getAsankaPaid()));
-        assertEquals(0, new BigDecimal("50.00").compareTo(result.getDivyaPaid()));
-        assertEquals("Divya", result.getWhoOwes());
+        assertEquals(0, BigDecimal.ZERO.compareTo(result.getDivyaPaid()));
+        assertEquals(0, BigDecimal.ZERO.compareTo(result.getAsankaPaid()));
+        assertNull(result.getWhoOwes());
     }
 
     @Test
@@ -533,7 +523,7 @@ class TransactionServiceTest {
         when(transactionRepository.searchTransactionByDateRangeAccountTypeTransactionType(
                 any(LocalDate.class), any(LocalDate.class),
                 eq(Arrays.asList(Transaction.AccountType.CIBC, Transaction.AccountType.AMEX)),
-                eq(Arrays.asList(Transaction.TransactionType.CARDPAYMENT))))
+                eq(Arrays.asList(Transaction.TransactionType.EXPENSE, Transaction.TransactionType.REFUND))))
                 .thenReturn(Collections.emptyList());
 
         // Asanka: $500 - $2000 = -$1500 net, Divya: $300 net
