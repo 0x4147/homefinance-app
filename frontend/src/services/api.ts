@@ -272,7 +272,7 @@ class ApiService {
         return this.makeRequest<{ uncategorizedCount: number }>('/categorization/uncategorized/count');
     }
 
-    async categorizeTransaction(merchant: string, details: string, amount: string, date: string): Promise<{ merchant: string; category: string | null; confidence: number; autoCategorized: boolean }> {
+    async categorizeTransaction(merchant: string, details: string, amount: string, date: string): Promise<{ merchant: string; category: string; autoCategorized: boolean }> {
         log.info(`Auto-categorizing transaction for merchant: ${merchant}`);
         const params = new URLSearchParams({
             merchant,
@@ -280,7 +280,7 @@ class ApiService {
             amount,
             date,
         });
-        return this.makeRequest<{ merchant: string; category: string | null; confidence: number; autoCategorized: boolean }>('/categorization/categorize', {
+        return this.makeRequest<{ merchant: string; category: string; autoCategorized: boolean }>('/categorization/categorize', {
             method: 'POST',
             body: params.toString(),
             headers: {

@@ -4,7 +4,6 @@ import ca.homefinance.entity.Category;
 import ca.homefinance.entity.PersonCard;
 import ca.homefinance.entity.Transaction;
 import ca.homefinance.helper.GeneralHelper;
-import ca.homefinance.helper.TransactionCategorizer;
 import ca.homefinance.repository.PersonCardRepository;
 import ca.homefinance.service.TransactionCategorizationService;
 import org.slf4j.Logger;
@@ -23,13 +22,11 @@ public class CIBCTransactionFieldMapper implements FieldSetMapper<Transaction> {
 
     private static final Logger logger = LoggerFactory.getLogger(CIBCTransactionFieldMapper.class);
 
-    private final TransactionCategorizer categorizer;
     private final PersonCardRepository personCardRepository;
     private final TransactionCategorizationService transactionCategorizationService;
 
     @Autowired
-    public CIBCTransactionFieldMapper(TransactionCategorizer categorizer, PersonCardRepository personCardRepository, TransactionCategorizationService transactionCategorizationService) {
-        this.categorizer = categorizer;
+    public CIBCTransactionFieldMapper(PersonCardRepository personCardRepository, TransactionCategorizationService transactionCategorizationService) {
         this.personCardRepository = personCardRepository;
         this.transactionCategorizationService = transactionCategorizationService;
     }
@@ -73,7 +70,6 @@ public class CIBCTransactionFieldMapper implements FieldSetMapper<Transaction> {
 
             transaction.setAccount(Transaction.AccountType.CIBC);
             
-//            Category category = categorizer.getCategory(transaction.getEntity()); //PREVIOUS CATEGORIZER - CAN DELETE LATER
             Category category = transactionCategorizationService.categorizeTransaction(transaction.getEntity(), null, transaction.getAmount(), transaction.getDate());
             if (category.getCategoryId() == null && category.getUncategorizedTransaction() != null){
                 transaction.setUncategorizedTransaction(category.getUncategorizedTransaction());

@@ -4,7 +4,6 @@ import ca.homefinance.entity.Category;
 import ca.homefinance.entity.Person;
 import ca.homefinance.entity.PersonCard;
 import ca.homefinance.entity.Transaction;
-import ca.homefinance.helper.TransactionCategorizer;
 import ca.homefinance.repository.PersonCardRepository;
 import ca.homefinance.service.TransactionCategorizationService;
 import org.junit.jupiter.api.BeforeEach;
@@ -30,9 +29,6 @@ class CIBCTransactionFieldMapperTest {
     private static final String ASANKA_CARD = "5223********5844";
 
     @Mock
-    private TransactionCategorizer categorizer;
-
-    @Mock
     private PersonCardRepository personCardRepository;
 
     @Mock
@@ -42,7 +38,7 @@ class CIBCTransactionFieldMapperTest {
 
     @BeforeEach
     void setUp() {
-        mapper = new CIBCTransactionFieldMapper(categorizer, personCardRepository, categorizationService);
+        mapper = new CIBCTransactionFieldMapper(personCardRepository, categorizationService);
 
         Category category = new Category();
         category.setCategoryId(1);

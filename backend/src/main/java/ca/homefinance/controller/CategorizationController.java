@@ -73,9 +73,8 @@ public class CategorizationController {
         
         Map<String, Object> response = Map.of(
                 "merchant", merchant,
-                "category", category != null ? category.getName() : null,
-                "confidence", categorizationService.getCategorizationConfidence(merchant),
-                "autoCategorized", category != null
+                "category", category != null && category.getName() != null ? category.getName() : "",
+                "autoCategorized", category != null && category.getCategoryId() != null
         );
         
         return new ResponseEntity<>(response, HttpStatus.OK);
@@ -172,10 +171,9 @@ public class CategorizationController {
 
         if (!linkedMainTransaction.isEmpty()){
             categorizationService.updateTransactionCategory((linkedMainTransaction.get(0).getTransactionId()), assignedCategory);
+        } else {
+            categorizationService.learnFromUserCorrection(uncategorized.getMerchant(), assignedCategory);
         }
-
-        // Learn from this correction
-        categorizationService.learnFromUserCorrection(uncategorized.getMerchant(), assignedCategory);
 
         return ResponseEntity.ok(Map.of("message", "Transaction reviewed and learning applied"));
     }

@@ -3,7 +3,6 @@ package ca.homefinance.mapper;
 import ca.homefinance.entity.Category;
 import ca.homefinance.entity.Transaction;
 import ca.homefinance.helper.GeneralHelper;
-import ca.homefinance.helper.TransactionCategorizer;
 import ca.homefinance.repository.PersonRepository;
 import ca.homefinance.service.TransactionCategorizationService;
 import org.slf4j.Logger;
@@ -23,13 +22,11 @@ import java.util.Locale;
 public class AMEXTransactionFieldMapper implements FieldSetMapper<Transaction> {
     private static final Logger logger = LoggerFactory.getLogger(AMEXTransactionFieldMapper.class);
     
-    private final TransactionCategorizer categorizer;
     private final PersonRepository personRepository;
     private final TransactionCategorizationService transactionCategorizationService;
 
     @Autowired
-    public AMEXTransactionFieldMapper(TransactionCategorizer categorizer, PersonRepository personRepository, TransactionCategorizationService transactionCategorizationService) {
-        this.categorizer = categorizer;
+    public AMEXTransactionFieldMapper(PersonRepository personRepository, TransactionCategorizationService transactionCategorizationService) {
         this.personRepository = personRepository;
         this.transactionCategorizationService = transactionCategorizationService;
     }
@@ -76,7 +73,6 @@ public class AMEXTransactionFieldMapper implements FieldSetMapper<Transaction> {
 
             transaction.setAccount(Transaction.AccountType.AMEX);
             
-//            Category category = categorizer.getCategory(transaction.getEntity()); //PREVIOUS CATEGORIZER - CAN DELETE LATER
             Category category = transactionCategorizationService.categorizeTransaction(transaction.getEntity(), null, transaction.getAmount(), transaction.getDate());
             if (category.getCategoryId() == null && category.getUncategorizedTransaction() != null){
                 transaction.setUncategorizedTransaction(category.getUncategorizedTransaction());
