@@ -24,6 +24,7 @@ export interface Transaction {
     transactionType: string;
     category: string;
     person: string;
+    uncategorizedTransaction?: { id: number } | null;
 }
 
 export interface TransactionDto {
@@ -33,7 +34,7 @@ export interface TransactionDto {
     details?: string;
     account: string;
     transactionType: string;
-    category: string;
+    category?: string;
     person: string;
 }
 

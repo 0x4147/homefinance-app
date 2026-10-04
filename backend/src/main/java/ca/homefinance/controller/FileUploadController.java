@@ -1,4 +1,4 @@
-package ca.homefinance.batch;
+package ca.homefinance.controller;
 
 
 import org.slf4j.Logger;

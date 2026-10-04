@@ -3,8 +3,8 @@ package ca.homefinance.service;
 import ca.homefinance.dto.MonthlyBalanceResponseDto;
 import ca.homefinance.dto.TransactionDto;
 import ca.homefinance.dto.TransactionSummary;
+import ca.homefinance.entity.Category;
 import ca.homefinance.entity.Transaction;
-import ca.homefinance.repository.CategoryRepository;
 import ca.homefinance.repository.PersonRepository;
 import ca.homefinance.repository.TransactionRepository;
 import lombok.RequiredArgsConstructor;
@@ -37,8 +37,8 @@ public class TransactionService {
     private static final Logger log = LoggerFactory.getLogger(TransactionService.class);
 
     private final TransactionRepository transactionRepository;
-    private final CategoryRepository categoryRepository;
     private final PersonRepository personRepository;
+    private final TransactionCategorizationService transactionCategorizationService;
 
     public List<Transaction> getAllTransactions() {
         return transactionRepository.findAll();
@@ -76,8 +76,6 @@ public class TransactionService {
         transaction.setDetails(transactionDto.getDetails());
         transaction.setAccount(parseEnum(Transaction.AccountType.class, transactionDto.getAccount(), "account"));
         transaction.setTransactionType(transactionType);
-        transaction.setCategory(categoryRepository.findById(parseId(transactionDto.getCategory(), "category"))
-                .orElseThrow(() -> badRequest("Unknown category")));
         transaction.setPerson(personRepository.findById(parseId(transactionDto.getPerson(), "person"))
                 .orElseThrow(() -> badRequest("Unknown person")));
 
@@ -85,6 +83,14 @@ public class TransactionService {
                 transaction.getAccount(), transaction.getDate(), transaction.getEntity(), transaction.getAmount()) > 0) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "A transaction with the same account, date, merchant and amount already exists");
+        }
+
+        Category category = transactionCategorizationService.categorizeTransaction(
+                transaction.getEntity(), transaction.getDetails(), transaction.getAmount(), transaction.getDate());
+        if (category.getCategoryId() != null) {
+            transaction.setCategory(category);
+        } else {
+            transaction.setUncategorizedTransaction(category.getUncategorizedTransaction());
         }
         return saveTransaction(transaction);
     }

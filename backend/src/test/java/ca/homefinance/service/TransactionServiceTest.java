@@ -5,7 +5,7 @@ import ca.homefinance.dto.TransactionDto;
 import ca.homefinance.entity.Category;
 import ca.homefinance.entity.Person;
 import ca.homefinance.entity.Transaction;
-import ca.homefinance.repository.CategoryRepository;
+import ca.homefinance.entity.UncategorizedTransaction;
 import ca.homefinance.repository.PersonRepository;
 import ca.homefinance.repository.TransactionRepository;
 import org.springframework.http.HttpStatus;
@@ -27,6 +27,7 @@ import java.util.Optional;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -38,10 +39,10 @@ class TransactionServiceTest {
     private TransactionRepository transactionRepository;
 
     @Mock
-    private CategoryRepository categoryRepository;
+    private PersonRepository personRepository;
 
     @Mock
-    private PersonRepository personRepository;
+    private TransactionCategorizationService transactionCategorizationService;
 
     @InjectMocks
     private TransactionService transactionService;
@@ -65,7 +66,7 @@ class TransactionServiceTest {
     @Test
     void createTransaction_ValidExpense_SavesPositiveAmount() {
         Category groceries = category(3, "Groceries");
-        when(categoryRepository.findById(3)).thenReturn(Optional.of(groceries));
+        stubCategorizer(groceries);
         when(personRepository.findById(1)).thenReturn(Optional.of(asanka));
         when(transactionRepository.save(any(Transaction.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -77,28 +78,38 @@ class TransactionServiceTest {
         assertEquals(Transaction.AccountType.CIBC, saved.getAccount());
         assertSame(groceries, saved.getCategory());
         assertSame(asanka, saved.getPerson());
+        verify(transactionCategorizationService).categorizeTransaction(eq("Costco"), isNull(), any(), any());
+    }
+
+    @Test
+    void createTransaction_UnmatchedMerchant_LinksToReviewInsteadOfCategory() {
+        UncategorizedTransaction review = new UncategorizedTransaction();
+        review.setId(7);
+        Category placeholder = new Category();
+        placeholder.setUncategorizedTransaction(review);
+        stubCategorizer(placeholder);
+        when(personRepository.findById(1)).thenReturn(Optional.of(asanka));
+        when(transactionRepository.save(any(Transaction.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        Transaction saved = transactionService.createTransaction(dto("25.00", "Mystery Shop", "CIBC", "EXPENSE", null, "1"));
+
+        assertNull(saved.getCategory());
+        assertSame(review, saved.getUncategorizedTransaction());
+    }
+
+    private void stubCategorizer(Category result) {
+        when(transactionCategorizationService.categorizeTransaction(any(), any(), any(), any())).thenReturn(result);
     }
 
     @Test
     void createTransaction_Refund_StoresNegativeAmount() {
-        when(categoryRepository.findById(3)).thenReturn(Optional.of(category(3, "Groceries")));
+        stubCategorizer(category(3, "Groceries"));
         when(personRepository.findById(1)).thenReturn(Optional.of(asanka));
         when(transactionRepository.save(any(Transaction.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         Transaction saved = transactionService.createTransaction(dto("-25.00", "Costco", "CIBC", "REFUND", "3", "1"));
 
         assertEquals(0, new BigDecimal("-25.00").compareTo(saved.getAmount()));
-    }
-
-    @Test
-    void createTransaction_UnknownCategory_ThrowsBadRequest() {
-        when(categoryRepository.findById(99)).thenReturn(Optional.empty());
-
-        ResponseStatusException ex = assertThrows(ResponseStatusException.class,
-                () -> transactionService.createTransaction(dto("25.00", "Costco", "CIBC", "EXPENSE", "99", "1")));
-
-        assertEquals(HttpStatus.BAD_REQUEST, ex.getStatusCode());
-        verify(transactionRepository, never()).save(any());
     }
 
     @Test
@@ -119,7 +130,6 @@ class TransactionServiceTest {
 
     @Test
     void createTransaction_ExistingMatch_ThrowsConflictWithoutSaving() {
-        when(categoryRepository.findById(3)).thenReturn(Optional.of(category(3, "Groceries")));
         when(personRepository.findById(1)).thenReturn(Optional.of(asanka));
         when(transactionRepository.countByAccountAndDateAndEntityAndAmount(
                 eq(Transaction.AccountType.CIBC), any(), eq("Costco"), any())).thenReturn(1L);
@@ -129,11 +139,12 @@ class TransactionServiceTest {
 
         assertEquals(HttpStatus.CONFLICT, ex.getStatusCode());
         verify(transactionRepository, never()).save(any());
+        verify(transactionCategorizationService, never()).categorizeTransaction(any(), any(), any(), any());
     }
 
     @Test
     void createTransaction_ExistingMatchAndAllowDuplicate_Saves() {
-        when(categoryRepository.findById(3)).thenReturn(Optional.of(category(3, "Groceries")));
+        stubCategorizer(category(3, "Groceries"));
         when(personRepository.findById(1)).thenReturn(Optional.of(asanka));
         when(transactionRepository.save(any(Transaction.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -145,7 +156,7 @@ class TransactionServiceTest {
 
     @Test
     void createTransaction_NoExistingMatch_SavesWithoutOverride() {
-        when(categoryRepository.findById(3)).thenReturn(Optional.of(category(3, "Groceries")));
+        stubCategorizer(category(3, "Groceries"));
         when(personRepository.findById(1)).thenReturn(Optional.of(asanka));
         when(transactionRepository.countByAccountAndDateAndEntityAndAmount(
                 any(), any(), any(), any())).thenReturn(0L);

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { apiService } from '../services/api';
-import type { Category, Person } from '../services/api';
+import type { Person } from '../services/api';
 
 const ACCOUNTS = ['CIBC', 'AMEX', 'ASANKA', 'DIVYA'];
 const TRANSACTION_TYPES = ['EXPENSE', 'INCOME', 'CARDPAYMENT', 'REFUND', 'BILL', 'RENTALBILLINCOME', 'RENTALRENTINCOME'];
@@ -10,7 +10,6 @@ const today = () => new Date().toLocaleDateString('en-CA');
 const inputClass = 'w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500';
 
 const AddTransaction: React.FC = () => {
-    const [categories, setCategories] = useState<Category[]>([]);
     const [persons, setPersons] = useState<Person[]>([]);
     const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -20,21 +19,17 @@ const AddTransaction: React.FC = () => {
     const [details, setDetails] = useState('');
     const [account, setAccount] = useState(ACCOUNTS[0]);
     const [transactionType, setTransactionType] = useState(TRANSACTION_TYPES[0]);
-    const [categoryId, setCategoryId] = useState('');
     const [personId, setPersonId] = useState('');
 
     const [isSaving, setIsSaving] = useState(false);
     const [message, setMessage] = useState<{ kind: 'success' | 'error'; text: string } | null>(null);
 
     useEffect(() => {
-        Promise.all([apiService.getAllCategories(), apiService.getPersons()])
-            .then(([loadedCategories, loadedPersons]) => {
-                setCategories(loadedCategories);
-                setPersons(loadedPersons);
-            })
+        apiService.getPersons()
+            .then(setPersons)
             .catch((error) => {
-                console.error('Failed to load categories or card holders', error);
-                setLoadError('Could not load categories or card holders. Refresh the page to try again.');
+                console.error('Failed to load card holders', error);
+                setLoadError('Could not load card holders. Refresh the page to try again.');
             });
     }, []);
 
@@ -43,7 +38,6 @@ const AddTransaction: React.FC = () => {
         date !== '' &&
         merchant.trim() !== '' &&
         parsedAmount > 0 &&
-        categoryId !== '' &&
         personId !== '' &&
         !isSaving;
 
@@ -60,12 +54,15 @@ const AddTransaction: React.FC = () => {
             details: details.trim() || undefined,
             account,
             transactionType,
-            category: categoryId,
             person: personId,
         };
         try {
             try {
-                await apiService.saveTransaction(transaction);
+                const saved = await apiService.saveTransaction(transaction);
+                const outcome = saved.uncategorizedTransaction
+                    ? 'It was not matched to a category and is in the review queue.'
+                    : 'It was categorized automatically.';
+                setMessage({ kind: 'success', text: `Saved ${merchant.trim()} for $${parsedAmount.toFixed(2)}. ${outcome}` });
             } catch (error) {
                 if (!(error instanceof Error) || !error.message.includes('409')) throw error;
                 const confirmed = window.confirm(
@@ -76,8 +73,8 @@ const AddTransaction: React.FC = () => {
                     return;
                 }
                 await apiService.saveTransaction(transaction, true);
+                setMessage({ kind: 'success', text: `Saved ${merchant.trim()} for $${parsedAmount.toFixed(2)}.` });
             }
-            setMessage({ kind: 'success', text: `Saved ${merchant.trim()} for $${parsedAmount.toFixed(2)}.` });
             setMerchant('');
             setAmount('');
             setDetails('');
@@ -130,17 +127,6 @@ const AddTransaction: React.FC = () => {
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Category</label>
-                        <select value={categoryId} onChange={(e) => setCategoryId(e.target.value)} className={inputClass}>
-                            <option value="">Choose a category...</option>
-                            {categories.map((category) => (
-                                <option key={category.categoryId} value={category.categoryId}>
-                                    {category.name}
-                                </option>
-                            ))}
-                        </select>
-                    </div>
-                    <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">Card holder</label>
                         <select value={personId} onChange={(e) => setPersonId(e.target.value)} className={inputClass}>
                             <option value="">Choose a person...</option>
@@ -151,9 +137,6 @@ const AddTransaction: React.FC = () => {
                             ))}
                         </select>
                     </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">Account</label>
                         <select value={account} onChange={(e) => setAccount(e.target.value)} className={inputClass}>
@@ -162,6 +145,9 @@ const AddTransaction: React.FC = () => {
                             ))}
                         </select>
                     </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">Transaction type</label>
                         <select value={transactionType} onChange={(e) => setTransactionType(e.target.value)} className={inputClass}>
@@ -170,14 +156,14 @@ const AddTransaction: React.FC = () => {
                             ))}
                         </select>
                     </div>
-                </div>
-
-                <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Details (optional)</label>
-                    <input type="text" value={details} onChange={(e) => setDetails(e.target.value)} className={inputClass} />
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Details (optional)</label>
+                        <input type="text" value={details} onChange={(e) => setDetails(e.target.value)} className={inputClass} />
+                    </div>
                 </div>
 
                 <p className="text-sm text-gray-500">
+                    The category is assigned automatically from your merchant rules. Unmatched merchants go to the review queue.
                     Refunds and card payments are saved as negative amounts automatically. Enter the amount as a positive number.
                 </p>
 
