@@ -1,9 +1,15 @@
 package ca.homefinance.service;
 
 import ca.homefinance.dto.MonthlyBalanceResponseDto;
+import ca.homefinance.dto.TransactionDto;
+import ca.homefinance.entity.Category;
 import ca.homefinance.entity.Person;
 import ca.homefinance.entity.Transaction;
+import ca.homefinance.repository.CategoryRepository;
+import ca.homefinance.repository.PersonRepository;
 import ca.homefinance.repository.TransactionRepository;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -16,10 +22,13 @@ import java.time.LocalDate;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -27,6 +36,12 @@ class TransactionServiceTest {
 
     @Mock
     private TransactionRepository transactionRepository;
+
+    @Mock
+    private CategoryRepository categoryRepository;
+
+    @Mock
+    private PersonRepository personRepository;
 
     @InjectMocks
     private TransactionService transactionService;
@@ -45,6 +60,112 @@ class TransactionServiceTest {
         divya.setPersonId(2);
         divya.setCode("DIVYA");
         divya.setName("Divya");
+    }
+
+    @Test
+    void createTransaction_ValidExpense_SavesPositiveAmount() {
+        Category groceries = category(3, "Groceries");
+        when(categoryRepository.findById(3)).thenReturn(Optional.of(groceries));
+        when(personRepository.findById(1)).thenReturn(Optional.of(asanka));
+        when(transactionRepository.save(any(Transaction.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        Transaction saved = transactionService.createTransaction(dto("25.00", "  Costco ", "CIBC", "EXPENSE", "3", "1"));
+
+        assertEquals(0, new BigDecimal("25.00").compareTo(saved.getAmount()));
+        assertEquals("Costco", saved.getEntity());
+        assertEquals(Transaction.TransactionType.EXPENSE, saved.getTransactionType());
+        assertEquals(Transaction.AccountType.CIBC, saved.getAccount());
+        assertSame(groceries, saved.getCategory());
+        assertSame(asanka, saved.getPerson());
+    }
+
+    @Test
+    void createTransaction_Refund_StoresNegativeAmount() {
+        when(categoryRepository.findById(3)).thenReturn(Optional.of(category(3, "Groceries")));
+        when(personRepository.findById(1)).thenReturn(Optional.of(asanka));
+        when(transactionRepository.save(any(Transaction.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        Transaction saved = transactionService.createTransaction(dto("-25.00", "Costco", "CIBC", "REFUND", "3", "1"));
+
+        assertEquals(0, new BigDecimal("-25.00").compareTo(saved.getAmount()));
+    }
+
+    @Test
+    void createTransaction_UnknownCategory_ThrowsBadRequest() {
+        when(categoryRepository.findById(99)).thenReturn(Optional.empty());
+
+        ResponseStatusException ex = assertThrows(ResponseStatusException.class,
+                () -> transactionService.createTransaction(dto("25.00", "Costco", "CIBC", "EXPENSE", "99", "1")));
+
+        assertEquals(HttpStatus.BAD_REQUEST, ex.getStatusCode());
+        verify(transactionRepository, never()).save(any());
+    }
+
+    @Test
+    void createTransaction_ZeroAmount_ThrowsBadRequest() {
+        ResponseStatusException ex = assertThrows(ResponseStatusException.class,
+                () -> transactionService.createTransaction(dto("0", "Costco", "CIBC", "EXPENSE", "3", "1")));
+
+        assertEquals(HttpStatus.BAD_REQUEST, ex.getStatusCode());
+    }
+
+    @Test
+    void createTransaction_InvalidAccount_ThrowsBadRequest() {
+        ResponseStatusException ex = assertThrows(ResponseStatusException.class,
+                () -> transactionService.createTransaction(dto("25.00", "Costco", "BANK", "EXPENSE", "3", "1")));
+
+        assertEquals(HttpStatus.BAD_REQUEST, ex.getStatusCode());
+    }
+
+    @Test
+    void createTransaction_ExistingMatch_ThrowsConflictWithoutSaving() {
+        when(categoryRepository.findById(3)).thenReturn(Optional.of(category(3, "Groceries")));
+        when(personRepository.findById(1)).thenReturn(Optional.of(asanka));
+        when(transactionRepository.countByAccountAndDateAndEntityAndAmount(
+                eq(Transaction.AccountType.CIBC), any(), eq("Costco"), any())).thenReturn(1L);
+
+        ResponseStatusException ex = assertThrows(ResponseStatusException.class,
+                () -> transactionService.createTransaction(dto("25.00", "Costco", "CIBC", "EXPENSE", "3", "1")));
+
+        assertEquals(HttpStatus.CONFLICT, ex.getStatusCode());
+        verify(transactionRepository, never()).save(any());
+    }
+
+    @Test
+    void createTransaction_ExistingMatchAndAllowDuplicate_Saves() {
+        when(categoryRepository.findById(3)).thenReturn(Optional.of(category(3, "Groceries")));
+        when(personRepository.findById(1)).thenReturn(Optional.of(asanka));
+        when(transactionRepository.save(any(Transaction.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        Transaction saved = transactionService.createTransaction(dto("25.00", "Costco", "CIBC", "EXPENSE", "3", "1"), true);
+
+        assertEquals(0, new BigDecimal("25.00").compareTo(saved.getAmount()));
+        verify(transactionRepository).save(any(Transaction.class));
+    }
+
+    @Test
+    void createTransaction_NoExistingMatch_SavesWithoutOverride() {
+        when(categoryRepository.findById(3)).thenReturn(Optional.of(category(3, "Groceries")));
+        when(personRepository.findById(1)).thenReturn(Optional.of(asanka));
+        when(transactionRepository.countByAccountAndDateAndEntityAndAmount(
+                any(), any(), any(), any())).thenReturn(0L);
+        when(transactionRepository.save(any(Transaction.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        transactionService.createTransaction(dto("25.00", "Costco", "CIBC", "EXPENSE", "3", "1"));
+
+        verify(transactionRepository).save(any(Transaction.class));
+    }
+
+    private static TransactionDto dto(String amount, String entity, String account, String type, String category, String person) {
+        return new TransactionDto(new BigDecimal(amount), LocalDate.of(2024, 2, 1), entity, null,
+                account, type, category, person);
+    }
+
+    private static Category category(int id, String name) {
+        Category category = new Category();
+        category.setCategoryId(id);
+        category.setName(name);
+        return category;
     }
 
     @Test

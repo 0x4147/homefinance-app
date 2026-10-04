@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { LayoutDashboard, PlusSquare, List, BarChart2, Calendar, Receipt, Brain, Tag } from 'lucide-react';
+import { LayoutDashboard, PlusSquare, FilePlus, List, BarChart2, Calendar, Receipt, Brain, Tag } from 'lucide-react';
 import { Chart as ChartJS, ArcElement, Tooltip, Legend, CategoryScale, LinearScale, PointElement, LineElement, Title, BarElement } from 'chart.js';
 import { Pie, Bar } from 'react-chartjs-2';
 import { apiService } from './services/api';
 import type { TransactionDto, MonthlyBalanceResponseDto, TransactionSummary, Transaction } from './services/api';
 import CategorizationReview from './components/CategorizationReview';
+import AddTransaction from './components/AddTransaction';
 
 // Register Chart.js components
 ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, PointElement, LineElement, Title, BarElement);
@@ -14,6 +15,7 @@ ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, PointE
 type View =
   | 'Dashboard'
   | 'AddBulkTransactions'
+  | 'AddTransaction'
   | 'ViewTransactions'
   | 'SpendingInsights'
   | 'MonthlyBalanceChecker'
@@ -1497,6 +1499,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeView, setActiveView }) => {
     const menuItems: { id: number; name: View; icon: React.ElementType }[] = [
         { id: 1, name: 'Dashboard', icon: LayoutDashboard },
         { id: 2, name: 'AddBulkTransactions', icon: PlusSquare },
+        { id: 8, name: 'AddTransaction', icon: FilePlus },
         { id: 3, name: 'ViewTransactions', icon: List },
         { id: 4, name: 'SpendingInsights', icon: BarChart2 },
         { id: 5, name: 'MonthlyBalanceChecker', icon: Calendar },
@@ -1552,6 +1555,8 @@ const App: React.FC = () => {
                 return <Dashboard />;
             case 'AddBulkTransactions':
                 return <AddBulkTransactions />;
+            case 'AddTransaction':
+                return <AddTransaction />;
             case 'ViewTransactions':
                 return <ViewTransactions />;
             case 'SpendingInsights':

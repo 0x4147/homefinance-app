@@ -71,6 +71,12 @@ export interface Category {
     description?: string;
 }
 
+export interface Person {
+    personId: number;
+    code: string;
+    name: string;
+}
+
 export interface AthenaInsightsResponse {
     analysis: string;
 }
@@ -130,12 +136,17 @@ class ApiService {
     }
 
     // Save a new transaction
-    async saveTransaction(transaction: TransactionDto): Promise<Transaction> {
+    async saveTransaction(transaction: TransactionDto, allowDuplicate = false): Promise<Transaction> {
         log.info('Saving new transaction:', transaction);
-        return this.makeRequest<Transaction>('/transaction/saveTransaction', {
+        const params = new URLSearchParams({ allowDuplicate: String(allowDuplicate) });
+        return this.makeRequest<Transaction>(`/transaction/saveTransaction?${params}`, {
             method: 'POST',
             body: JSON.stringify(transaction),
         });
+    }
+
+    async getPersons(): Promise<Person[]> {
+        return this.makeRequest<Person[]>('/person/getAllPersons');
     }
 
     // Get monthly balance

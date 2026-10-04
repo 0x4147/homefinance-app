@@ -32,8 +32,9 @@ public class TransactionController {
     }
 
     @PostMapping("/saveTransaction")
-    public ResponseEntity<Transaction> saveTransaction(@RequestBody TransactionDto transaction) {
-        return ResponseEntity.ok(transactionService.createTransaction(transaction));
+    public ResponseEntity<Transaction> saveTransaction(@RequestBody TransactionDto transaction,
+                                                       @RequestParam(defaultValue = "false") boolean allowDuplicate) {
+        return ResponseEntity.ok(transactionService.createTransaction(transaction, allowDuplicate));
     }
 
     @GetMapping("/getMonthlyBalance")

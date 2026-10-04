@@ -10,7 +10,9 @@ import ca.homefinance.repository.TransactionRepository;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -47,16 +49,64 @@ public class TransactionService {
     }
 
     public Transaction createTransaction(TransactionDto transactionDto) {
+        return createTransaction(transactionDto, false);
+    }
+
+    public Transaction createTransaction(TransactionDto transactionDto, boolean allowDuplicate) {
+        if (transactionDto.getAmount() == null || transactionDto.getAmount().signum() == 0) {
+            throw badRequest("Amount must be non-zero");
+        }
+        if (transactionDto.getDate() == null) {
+            throw badRequest("Date is required");
+        }
+        if (transactionDto.getEntity() == null || transactionDto.getEntity().isBlank()) {
+            throw badRequest("Merchant is required");
+        }
+
+        Transaction.TransactionType transactionType = parseEnum(Transaction.TransactionType.class,
+                transactionDto.getTransactionType(), "transaction type");
+        BigDecimal magnitude = transactionDto.getAmount().abs();
+        boolean outflowSign = transactionType == Transaction.TransactionType.REFUND
+                || transactionType == Transaction.TransactionType.CARDPAYMENT;
+
         Transaction transaction = new Transaction();
-        transaction.setAmount(transactionDto.getAmount());
+        transaction.setAmount(outflowSign ? magnitude.negate() : magnitude);
         transaction.setDate(transactionDto.getDate());
-        transaction.setEntity(transactionDto.getEntity());
+        transaction.setEntity(transactionDto.getEntity().trim());
         transaction.setDetails(transactionDto.getDetails());
-        transaction.setAccount(Transaction.AccountType.valueOf(transactionDto.getAccount()));
-        transaction.setTransactionType(Transaction.TransactionType.valueOf(transactionDto.getTransactionType()));
-        transaction.setCategory(categoryRepository.findById(Integer.parseInt(transactionDto.getCategory())).orElseThrow());
-        transaction.setPerson(personRepository.findById(Integer.parseInt(transactionDto.getPerson())).orElseThrow());
+        transaction.setAccount(parseEnum(Transaction.AccountType.class, transactionDto.getAccount(), "account"));
+        transaction.setTransactionType(transactionType);
+        transaction.setCategory(categoryRepository.findById(parseId(transactionDto.getCategory(), "category"))
+                .orElseThrow(() -> badRequest("Unknown category")));
+        transaction.setPerson(personRepository.findById(parseId(transactionDto.getPerson(), "person"))
+                .orElseThrow(() -> badRequest("Unknown person")));
+
+        if (!allowDuplicate && transactionRepository.countByAccountAndDateAndEntityAndAmount(
+                transaction.getAccount(), transaction.getDate(), transaction.getEntity(), transaction.getAmount()) > 0) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "A transaction with the same account, date, merchant and amount already exists");
+        }
         return saveTransaction(transaction);
+    }
+
+    private static <E extends Enum<E>> E parseEnum(Class<E> type, String value, String field) {
+        try {
+            return Enum.valueOf(type, value);
+        } catch (IllegalArgumentException | NullPointerException e) {
+            throw badRequest("Invalid " + field + ": " + value);
+        }
+    }
+
+    private static Integer parseId(String value, String field) {
+        try {
+            return Integer.valueOf(value);
+        } catch (NumberFormatException | NullPointerException e) {
+            throw badRequest("Invalid " + field + " id: " + value);
+        }
+    }
+
+    private static ResponseStatusException badRequest(String message) {
+        return new ResponseStatusException(HttpStatus.BAD_REQUEST, message);
     }
 
     public List<Transaction> getTransactionsByDateRange(LocalDate startDate, LocalDate endDate) {
