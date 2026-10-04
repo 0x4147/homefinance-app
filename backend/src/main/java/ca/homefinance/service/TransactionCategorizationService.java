@@ -9,7 +9,6 @@ import ca.homefinance.repository.CategoryRepository;
 import ca.homefinance.repository.MerchantRuleRepository;
 import ca.homefinance.repository.TransactionRepository;
 import ca.homefinance.repository.UncategorizedTransactionRepository;
-import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -18,8 +17,6 @@ import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.io.IOException;
-import java.io.InputStream;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -34,7 +31,6 @@ import static ca.homefinance.helper.TransactionCategorizationHelper.*;
 public class TransactionCategorizationService {
 
     private static final Logger log = LoggerFactory.getLogger(TransactionCategorizationService.class);
-    private static final String MAPPINGS_FILE = "category_mappings.json";
     private static final double FUZZY_THRESHOLD = 0.80;
     private static final double SUGGESTION_MIN_SCORE = 0.50;
     private static final int SUGGESTION_LIMIT = 3;
@@ -58,7 +54,6 @@ public class TransactionCategorizationService {
     @EventListener(ApplicationReadyEvent.class)
     @Transactional
     public void seedRules() {
-        seedFromStaticMappings();
         seedFromHistory();
     }
 
@@ -165,29 +160,6 @@ public class TransactionCategorizationService {
                 linked.setCategory(category);
                 transactionRepository.save(linked);
             }
-        }
-    }
-
-    private void seedFromStaticMappings() {
-        try (InputStream inputStream = getClass().getClassLoader().getResourceAsStream(MAPPINGS_FILE)) {
-            if (inputStream == null) {
-                log.warn("{} not found; skipping static rule seed", MAPPINGS_FILE);
-                return;
-            }
-            Map<String, List<String>> mappings = objectMapper.readValue(inputStream,
-                    new TypeReference<Map<String, List<String>>>() {});
-            for (Map.Entry<String, List<String>> entry : mappings.entrySet()) {
-                Category category = categoryRepository.findByName(entry.getKey());
-                if (category == null) {
-                    log.warn("Category '{}' from {} does not exist", entry.getKey(), MAPPINGS_FILE);
-                    continue;
-                }
-                for (String merchant : entry.getValue()) {
-                    addRuleIfAbsent(normalize(merchant), category, Source.SEED);
-                }
-            }
-        } catch (IOException e) {
-            log.error("Failed to load {}", MAPPINGS_FILE, e);
         }
     }
 
