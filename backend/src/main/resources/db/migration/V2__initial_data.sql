@@ -1,10 +1,10 @@
---Person
+-- Person
 INSERT INTO person (code, name, email)
 VALUES
     ('ASANKA', 'Asanka', 'asanka.nz@gmail.com'),
     ('DIVYA', 'Divya', 'divyamehta.nz@gmail.com');
 
---Category
+-- Category
 INSERT INTO category (name, type)
 VALUES
     ('Utility Bill', 'EXPENSE'),
@@ -29,7 +29,7 @@ VALUES
     ('Clothing', 'EXPENSE');
 
 
---PersonCard
+-- PersonCard
 INSERT INTO person_card (person_id, card_identifier)
 SELECT person_id, '5223********5844' FROM person WHERE code = 'ASANKA';
 INSERT INTO person_card (person_id, card_identifier)

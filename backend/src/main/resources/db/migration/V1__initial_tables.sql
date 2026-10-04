@@ -80,7 +80,7 @@ CREATE TABLE payment (
     FOREIGN KEY (transaction_id) REFERENCES transaction(transaction_id) ON DELETE SET NULL
 );
 
---Categorization rules for merchants
+-- Categorization rules for merchants
 CREATE TABLE merchant_rule (
     id INT AUTO_INCREMENT PRIMARY KEY,
     normalized_merchant VARCHAR(255) NOT NULL UNIQUE,
