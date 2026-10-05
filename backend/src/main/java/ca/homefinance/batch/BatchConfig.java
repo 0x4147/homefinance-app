@@ -92,6 +92,11 @@ public class BatchConfig {
 
         if ("amex".equalsIgnoreCase(sourceType)) {
             logger.info("Configuring reader for AMEX format");
+            // First line is a header row
+            reader.setLinesToSkip(1);
+            // CSV columns: Date, Date Processed, Description, Card Member, Account #, Amount
+            // Skip Date Processed (1) and Account # (4); only the remaining four are used
+            tokenizer.setIncludedFields(0, 2, 3, 5);
             tokenizer.setNames("date", "entity", "person", "amount");
             lineMapper.setFieldSetMapper(amexTransactionFieldMapper);
         } else if ("cibc".equalsIgnoreCase(sourceType)) {

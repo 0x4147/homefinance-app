@@ -39,6 +39,7 @@ public class AMEXTransactionFieldMapper implements FieldSetMapper<Transaction> {
 
             DateTimeFormatter formatter1 = DateTimeFormatter.ofPattern("d MMM. yyyy", Locale.ENGLISH);
             DateTimeFormatter formatter2 = DateTimeFormatter.ofPattern("d MMM yyyy", Locale.ENGLISH);
+            DateTimeFormatter formatter3 = DateTimeFormatter.ofPattern("d-MMM-yy", Locale.ENGLISH);
 
             String rawDate = fieldSet.readString("date");
             logger.debug("Raw date from field set: {}", rawDate);
@@ -48,8 +49,14 @@ public class AMEXTransactionFieldMapper implements FieldSetMapper<Transaction> {
                 logger.debug("Parsed date with formatter1: {}", parsedDate);
             } catch (DateTimeParseException e1) {
                 logger.debug("Failed to parse with formatter1, trying formatter2");
-                parsedDate = LocalDate.parse(rawDate, formatter2);
-                logger.debug("Parsed date with formatter2: {}", parsedDate);
+                try {
+                    parsedDate = LocalDate.parse(rawDate, formatter2);
+                    logger.debug("Parsed date with formatter2: {}", parsedDate);
+                } catch (DateTimeParseException e2) {
+                    logger.debug("Failed to parse with formatter2, trying formatter3");
+                    parsedDate = LocalDate.parse(rawDate, formatter3);
+                    logger.debug("Parsed date with formatter3: {}", parsedDate);
+                }
             }
             transaction.setDate(parsedDate);
 
