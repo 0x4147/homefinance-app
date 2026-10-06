@@ -1,14 +1,12 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { LayoutDashboard, PlusSquare, FilePlus, List, BarChart2, Calendar, Receipt, Brain, Tag } from 'lucide-react';
-import { Chart as ChartJS, ArcElement, Tooltip, Legend, CategoryScale, LinearScale, PointElement, LineElement, Title, BarElement } from 'chart.js';
-import { Pie, Bar } from 'react-chartjs-2';
+import { DonutChartCard } from './components/Charts';
+import { TrendChartCard } from './components/TrendChart';
+import type { TrendPoint } from './components/TrendChart';
 import { apiService } from './services/api';
 import type { TransactionDto, MonthlyBalanceResponseDto, TransactionSummary, Transaction } from './services/api';
 import CategorizationReview from './components/CategorizationReview';
 import AddTransaction from './components/AddTransaction';
-
-// Register Chart.js components
-ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, PointElement, LineElement, Title, BarElement);
 
 // --- Type Definitions for TypeScript ---
 // This defines the possible views our application can have.
@@ -245,74 +243,18 @@ const TransactionsModal = ({
     );
 };
 
-// --- Pie Chart Component ---
-const PieChartCard = ({ title, data, colors, onSliceClick }: { title: string; data: any; colors: string[]; onSliceClick?: (label: string, index: number) => void }) => {
-    const chartData = {
-        labels: data.labels,
-        datasets: [
-            {
-                data: data.values,
-                backgroundColor: colors,
-                borderColor: colors.map(color => color + '80'),
-                borderWidth: 2,
-            },
-        ],
-    };
-
-    const options: any = {
-        responsive: true,
-        onClick: (_evt: any, elements: any[], chart: any) => {
-            if (!onSliceClick || !elements || elements.length === 0) return;
-            const idx = elements[0].index;
-            const label = chart.data.labels[idx];
-            onSliceClick(label, idx);
-        },
-        plugins: {
-            legend: {
-                position: 'bottom' as const,
-                labels: {
-                    padding: 20,
-                    usePointStyle: true,
-                },
-            },
-            tooltip: {
-                callbacks: {
-                    label: function(context: any) {
-                        const label = context.label || '';
-                        const value = context.parsed;
-                        const total = context.dataset.data.reduce((a: number, b: number) => a + b, 0);
-                        const percentage = ((value / total) * 100).toFixed(1);
-                        return `${label}: $${value.toLocaleString()} (${percentage}%)`;
-                    }
-                }
-            }
-        },
-    };
-
-    return (
-        <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">{title}</h3>
-            <div className="h-96 w-full flex items-center justify-center">
-                <Pie data={chartData} options={options} />
-            </div>
-        </div>
-    );
-};
-
 // --- Dashboard Component ---
 const Dashboard = () => {
     const [categoryData, setCategoryData] = useState<{ labels: string[]; values: number[]; details?: Record<string, (TransactionDto | Transaction)[]>; originalKeys?: string[] }>({ labels: [], values: [] });
     const [merchantData, setMerchantData] = useState<{ labels: string[]; values: number[]; details?: Record<string, (TransactionDto | Transaction)[]>; originalKeys?: string[] }>({ labels: [], values: [] });
     const [monthlyData, setMonthlyData] = useState<{ labels: string[]; values: number[]; details?: Record<string, (TransactionDto | Transaction)[]>; originalKeys?: string[] }>({ labels: [], values: [] });
+    const [trendData, setTrendData] = useState<TrendPoint[]>([]);
+    const [trendDetails, setTrendDetails] = useState<Record<string, (TransactionDto | Transaction)[]>>({});
     const [isLoading, setIsLoading] = useState(true);
     const [modalOpen, setModalOpen] = useState(false);
     const [modalTitle, setModalTitle] = useState('');
     const [modalTransactions, setModalTransactions] = useState<(TransactionDto | Transaction)[]>([]);
 
-    const colors = [
-        '#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#06B6D4',
-        '#84CC16', '#F97316', '#EC4899', '#6366F1', '#14B8A6', '#F43F5E'
-    ];
 
     useEffect(() => {
         const loadDashboardData = async () => {
@@ -366,6 +308,26 @@ const Dashboard = () => {
                         originalKeys: keys
                     });
                 }
+
+                // Load 12-month trend (months with no spending are filled with 0)
+                const fmtKey = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+                const trendStart = new Date(now.getFullYear(), now.getMonth() - 11, 1);
+                const trendResponse = await apiService.getExpensesByMonth(fmtKey(trendStart), fmtKey(now));
+                if (trendResponse) {
+                    const points: TrendPoint[] = [];
+                    for (let i = 0; i < 12; i++) {
+                        const d = new Date(trendStart.getFullYear(), trendStart.getMonth() + i, 1);
+                        const key = fmtKey(d);
+                        const month = d.toLocaleDateString('en-US', { month: 'short' });
+                        points.push({
+                            key,
+                            label: i === 0 || d.getMonth() === 0 ? `${month} '${String(d.getFullYear()).slice(2)}` : month,
+                            value: Number(trendResponse.totals[key] ?? 0)
+                        });
+                    }
+                    setTrendData(points);
+                    setTrendDetails(trendResponse.details || {});
+                }
             } catch (error) {
                 console.error('Error loading dashboard data:', error);
             } finally {
@@ -398,31 +360,34 @@ const Dashboard = () => {
         <div className="max-w-7xl mx-auto animate-fade-in">
             <WelcomeHeader />
             <AthenaSummary />
+
+            <TrendChartCard
+                title="Spending Trend (Past 12 Months)"
+                data={trendData}
+                onPointClick={(p) => openTransactions(`Transactions in ${p.label}`, trendDetails[p.key])}
+            />
             
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                <BarChartCard
+                <DonutChartCard
                     title="Top10 Spending by Category (Past 3 Months)" 
                     data={categoryData} 
-                    colors={colors.slice(0, 12)}
-                    onBarClick={(index) => {
+                    onSliceClick={(_label, index) => {
                         const key = categoryData.originalKeys?.[index] || '';
                         openTransactions(`Transactions in ${categoryData.labels[index]}`, categoryData.details?.[key]);
                     }}
                 />
-                <BarChartCard 
+                <DonutChartCard 
                     title="Top10 Spending by Merchant (Past 3 Months)" 
                     data={merchantData} 
-                    colors={colors.slice(6, 12)} 
-                    onBarClick={(index) => {
+                    onSliceClick={(_label, index) => {
                         const key = merchantData.originalKeys?.[index] || '';
                         openTransactions(`Transactions in ${merchantData.labels[index]}`, merchantData.details?.[key]);
                     }}
                 />
-                <BarChartCard 
+                <DonutChartCard 
                     title="Spending by Month (Past 3 Months)" 
                     data={monthlyData} 
-                    colors={colors.slice(0, 12)} 
-                    onBarClick={(index) => {
+                    onSliceClick={(_label, index) => {
                         const key = monthlyData.originalKeys?.[index] || '';
                         openTransactions(`Transactions in ${monthlyData.labels[index]}`, monthlyData.details?.[key]);
                     }}
@@ -817,62 +782,6 @@ const ViewTransactions = () => {
     );
 };
 
-// Bar Chart Component for monthly spending
-const BarChartCard = ({ title, data, colors, onBarClick }: { title: string; data: any; colors: string[]; onBarClick?: (index: number) => void }) => {
-    const chartData = {
-        labels: data.labels,
-        datasets: [
-            {
-                label: 'Spending',
-                data: data.values,
-                backgroundColor: colors,
-                borderColor: colors.map(color => color + '80'),
-                borderWidth: 1,
-            },
-        ],
-    };
-
-    const options: any = {
-        responsive: true,
-        onClick: (_evt: any, elements: any[]) => {
-            if (!onBarClick || !elements || elements.length === 0) return;
-            const idx = elements[0].index;
-            onBarClick(idx);
-        },
-        plugins: {
-            legend: {
-                display: false,
-            },
-            tooltip: {
-                callbacks: {
-                    label: function(context: any) {
-                        return `$${context.parsed.y.toLocaleString()}`;
-                    }
-                }
-            }
-        },
-        scales: {
-            y: {
-                beginAtZero: true,
-                ticks: {
-                    callback: function(value: any) {
-                        return '$' + value.toLocaleString();
-                    }
-                }
-            }
-        }
-    };
-
-    return (
-        <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">{title}</h3>
-            <div className="h-96 w-full flex items-center justify-center">
-                <Bar data={chartData} options={options} />
-            </div>
-        </div>
-    );
-};
-
 const SpendingInsights = () => {
     const [selectedOption, setSelectedOption] = useState<string>('');
     const [athenaQuery, setAthenaQuery] = useState<string>('');
@@ -890,10 +799,6 @@ const SpendingInsights = () => {
     const [modalTransactions, setModalTransactions] = useState<(TransactionDto | Transaction)[]>([]);
     const [isLoading, setIsLoading] = useState<boolean>(false);
 
-    const colors = [
-        '#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#06B6D4',
-        '#84CC16', '#F97316', '#EC4899', '#6366F1', '#14B8A6', '#F43F5E'
-    ];
 
     // Sample data for different chart types
     // const sampleCategoryData = {
@@ -930,18 +835,59 @@ const SpendingInsights = () => {
         }
     };
 
-    const handleDateRangeSubmit = async () => {
-        if (!startDate || !endDate) {
+    // Guards against a slow response from a previous option overwriting the current one
+    const requestIdRef = useRef(0);
+
+    const lastDayOfMonth = (month: string) => {
+        const [y, m] = month.split('-').map(Number);
+        return `${month}-${String(new Date(y, m, 0).getDate()).padStart(2, '0')}`;
+    };
+
+    const selectOption = (option: string) => {
+        if (option === selectedOption) return;
+        requestIdRef.current++;
+        setSelectedOption(option);
+        setChartData(null);
+        setDetailsMap(null);
+        setOriginalKeys(null);
+        setIsLoading(false);
+
+        // Keep the date range and month range in sync, then reload for the new option
+        if (option === 'category' || option === 'merchant') {
+            let s = startDate;
+            let e = endDate;
+            if (!s && startMonth) s = `${startMonth}-01`;
+            if (!e && endMonth) e = lastDayOfMonth(endMonth);
+            if (s !== startDate) setStartDate(s);
+            if (e !== endDate) setEndDate(e);
+            if (s && e) handleDateRangeSubmit(option, s, e);
+        } else if (option === 'monthly') {
+            const s = startMonth || (startDate ? startDate.substring(0, 7) : '');
+            const e = endMonth || (endDate ? endDate.substring(0, 7) : '');
+            if (s !== startMonth) setStartMonth(s);
+            if (e !== endMonth) setEndMonth(e);
+            if (s && e) handleMonthlySubmit(s, e);
+        }
+    };
+
+    const handleDateRangeSubmit = async (
+        option: string = selectedOption,
+        start: string = startDate,
+        end: string = endDate
+    ) => {
+        if (!start || !end) {
             alert('Please select both start and end dates');
             return;
         }
 
+        const requestId = ++requestIdRef.current;
         setIsLoading(true);
-        
+
         try {
             let data: TransactionSummary | undefined;
-            if (selectedOption === 'category') {
-                data = await apiService.getExpensesByCategory(startDate, endDate);            
+            if (option === 'category') {
+                data = await apiService.getExpensesByCategory(start, end);
+                if (requestId !== requestIdRef.current) return;
                 if (data) {
                     const chartData = {
                         labels: Object.keys(data.totals),
@@ -951,8 +897,9 @@ const SpendingInsights = () => {
                     setDetailsMap(data.details);
                     setOriginalKeys(null);
                 }
-            } else if (selectedOption === 'merchant') {
-                data = await apiService.getExpensesByEntityTop10(startDate, endDate);
+            } else if (option === 'merchant') {
+                data = await apiService.getExpensesByEntityTop10(start, end);
+                if (requestId !== requestIdRef.current) return;
                 if (data) {
                     const originalKeys = Object.keys(data.totals);
                     const labels = originalKeys.map(key =>
@@ -969,24 +916,27 @@ const SpendingInsights = () => {
             }
 
         } catch (error) {
+            if (requestId !== requestIdRef.current) return;
             console.error('Error fetching data:', error);
             alert('Failed to fetch data. Please try again.');
         } finally {
-            setIsLoading(false);
+            if (requestId === requestIdRef.current) setIsLoading(false);
         }
     };
 
-    const handleMonthlySubmit = async () => {
-        if (!startMonth || !endMonth) {
+    const handleMonthlySubmit = async (start: string = startMonth, end: string = endMonth) => {
+        if (!start || !end) {
             alert('Please select both start and end months');
             return;
         }
 
+        const requestId = ++requestIdRef.current;
         setIsLoading(true);
-        
+
         try {
-            const data = await apiService.getExpensesByMonth(startMonth, endMonth);
-            
+            const data = await apiService.getExpensesByMonth(start, end);
+            if (requestId !== requestIdRef.current) return;
+
             if (data) {
                 const keys = Object.keys(data.totals);
                 const chartData = {
@@ -1003,10 +953,11 @@ const SpendingInsights = () => {
                 setOriginalKeys(keys);
             }
         } catch (error) {
+            if (requestId !== requestIdRef.current) return;
             console.error('Error fetching monthly data:', error);
             alert('Failed to fetch monthly data. Please try again.');
         } finally {
-            setIsLoading(false);
+            if (requestId === requestIdRef.current) setIsLoading(false);
         }
     };
 
@@ -1072,7 +1023,7 @@ const SpendingInsights = () => {
                                 </div>
                             </div>
                             <button
-                                onClick={handleDateRangeSubmit}
+                                onClick={() => handleDateRangeSubmit()}
                                 disabled={!startDate || !endDate || isLoading}
                                 className={`px-6 py-2 rounded-lg font-medium transition-colors duration-200 ${
                                     startDate && endDate && !isLoading
@@ -1084,10 +1035,9 @@ const SpendingInsights = () => {
                             </button>
                             {chartData && (
                                 <div className="mt-6">
-                                    <PieChartCard 
+                                    <DonutChartCard 
                                         title="Spending by Category" 
                                         data={chartData} 
-                                        colors={colors.slice(0, 6)} 
                                         onSliceClick={(label) => {
                                             const txs = detailsMap?.[label] || [];
                                             setModalTitle(`Transactions in ${label}`);
@@ -1127,7 +1077,7 @@ const SpendingInsights = () => {
                                 </div>
                             </div>
                             <button
-                                onClick={handleDateRangeSubmit}
+                                onClick={() => handleDateRangeSubmit()}
                                 disabled={!startDate || !endDate || isLoading}
                                 className={`px-6 py-2 rounded-lg font-medium transition-colors duration-200 ${
                                     startDate && endDate && !isLoading
@@ -1139,11 +1089,10 @@ const SpendingInsights = () => {
                             </button>
                             {chartData && (
                                 <div className="mt-6">
-                                    <BarChartCard 
+                                    <DonutChartCard 
                                         title="Top Merchants" 
                                         data={chartData} 
-                                        colors={colors.slice(6, 12)} 
-                                        onBarClick={(index) => {
+                                        onSliceClick={(_label, index) => {
                                             const key = originalKeys?.[index] || '';
                                             const txs = (key && detailsMap) ? (detailsMap[key] || []) : [];
                                             setModalTitle(`Transactions in ${chartData.labels[index]}`);
@@ -1183,7 +1132,7 @@ const SpendingInsights = () => {
                                 </div>
                             </div>
                             <button
-                                onClick={handleMonthlySubmit}
+                                onClick={() => handleMonthlySubmit()}
                                 disabled={!startMonth || !endMonth || isLoading}
                                 className={`px-6 py-2 rounded-lg font-medium transition-colors duration-200 ${
                                     startMonth && endMonth && !isLoading
@@ -1195,11 +1144,10 @@ const SpendingInsights = () => {
                             </button>
                             {chartData && (
                                 <div className="mt-6">
-                                    <BarChartCard 
+                                    <DonutChartCard 
                                         title="Monthly Spending" 
                                         data={chartData} 
-                                        colors={colors.slice(0, 6)} 
-                                        onBarClick={(index) => {
+                                        onSliceClick={(_label, index) => {
                                             const key = originalKeys?.[index] || '';
                                             const txs = (key && detailsMap) ? (detailsMap[key] || []) : [];
                                             setModalTitle(`Transactions in ${chartData.labels[index]}`);
@@ -1237,7 +1185,7 @@ const SpendingInsights = () => {
                 <h3 className="text-lg font-semibold text-gray-900 mb-4">Choose Analysis Type</h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                     <button
-                        onClick={() => setSelectedOption('athena')}
+                        onClick={() => selectOption('athena')}
                         className={`p-4 rounded-lg border-2 transition-colors duration-200 ${
                             selectedOption === 'athena'
                                 ? 'border-purple-500 bg-purple-50 text-purple-700'
@@ -1250,7 +1198,7 @@ const SpendingInsights = () => {
                         </div>
                     </button>
                     <button
-                        onClick={() => setSelectedOption('category')}
+                        onClick={() => selectOption('category')}
                         className={`p-4 rounded-lg border-2 transition-colors duration-200 ${
                             selectedOption === 'category'
                                 ? 'border-blue-500 bg-blue-50 text-blue-700'
@@ -1263,7 +1211,7 @@ const SpendingInsights = () => {
                         </div>
                     </button>
                     <button
-                        onClick={() => setSelectedOption('merchant')}
+                        onClick={() => selectOption('merchant')}
                         className={`p-4 rounded-lg border-2 transition-colors duration-200 ${
                             selectedOption === 'merchant'
                                 ? 'border-green-500 bg-green-50 text-green-700'
@@ -1276,7 +1224,7 @@ const SpendingInsights = () => {
                         </div>
                     </button>
                     <button
-                        onClick={() => setSelectedOption('monthly')}
+                        onClick={() => selectOption('monthly')}
                         className={`p-4 rounded-lg border-2 transition-colors duration-200 ${
                             selectedOption === 'monthly'
                                 ? 'border-orange-500 bg-orange-50 text-orange-700'
