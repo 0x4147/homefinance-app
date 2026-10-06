@@ -1,5 +1,6 @@
 package ca.homefinance.controller;
 
+import ca.homefinance.dto.ReviewGroup;
 import ca.homefinance.entity.Category;
 import ca.homefinance.entity.Transaction;
 import ca.homefinance.entity.UncategorizedTransaction;
@@ -176,6 +177,37 @@ public class CategorizationController {
         }
 
         return ResponseEntity.ok(Map.of("message", "Transaction reviewed and learning applied"));
+    }
+
+    /**
+     * Pending reviews grouped by merchant, so one decision resolves every matching transaction
+     */
+    @GetMapping("/uncategorized/groups")
+    public ResponseEntity<List<ReviewGroup>> getUncategorizedGroups() {
+        return ResponseEntity.ok(categorizationService.getReviewGroups());
+    }
+
+    /**
+     * Categorize a whole merchant group at once and learn the rule
+     */
+    @PostMapping("/review/group")
+    public ResponseEntity<Map<String, Object>> reviewGroup(
+            @RequestParam String merchantKey,
+            @RequestParam String assignedCategory) {
+
+        int resolved = categorizationService.learnFromUserCorrection(merchantKey, assignedCategory);
+        return ResponseEntity.ok(Map.of("resolved", resolved));
+    }
+
+    /**
+     * Re-run the current rules over all pending reviews (use after rules change)
+     */
+    @PostMapping("/recategorize")
+    public ResponseEntity<Map<String, Object>> recategorize() {
+        int resolved = categorizationService.recategorizePending();
+        return ResponseEntity.ok(Map.of(
+                "resolved", resolved,
+                "remaining", uncategorizedTransactionRepository.countByReviewedFalse()));
     }
 
     /**

@@ -1,33 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { CheckCircle, AlertCircle, Clock, DollarSign, Calendar, Building } from 'lucide-react';
-import { apiService } from '../services/api';
-
-interface UncategorizedTransaction {
-    id: number;
-    merchant: string;
-    details: string;
-    amount: number;
-    date: string;
-    suggestedCategories: string;
-    confidenceScore: number;
-    createdAt: string;
-    reviewed: boolean;
-    assignedCategory?: string;
-    reviewedAt?: string;
-}
-
-interface Category {
-    categoryId: number;
-    name: string;
-    type: string;
-    description?: string;
-}
+import { CheckCircle, AlertCircle, DollarSign, Building, RefreshCw } from 'lucide-react';
+import { apiService, type Category, type ReviewGroup } from '../services/api';
 
 const CategorizationReview: React.FC = () => {
-    const [uncategorizedTransactions, setUncategorizedTransactions] = useState<UncategorizedTransaction[]>([]);
+    const [groups, setGroups] = useState<ReviewGroup[]>([]);
     const [categories, setCategories] = useState<Category[]>([]);
     const [isLoading, setIsLoading] = useState(true);
-    const [selectedTransaction, setSelectedTransaction] = useState<UncategorizedTransaction | null>(null);
+    const [selectedGroup, setSelectedGroup] = useState<ReviewGroup | null>(null);
     const [selectedCategory, setSelectedCategory] = useState<string>('');
     const [isProcessing, setIsProcessing] = useState(false);
 
@@ -38,12 +17,12 @@ const CategorizationReview: React.FC = () => {
     const loadData = async () => {
         try {
             setIsLoading(true);
-            const [uncategorizedResponse, categoriesResponse] = await Promise.all([
-                apiService.getUncategorizedTransactions(),
+            const [groupsResponse, categoriesResponse] = await Promise.all([
+                apiService.getUncategorizedGroups(),
                 apiService.getAllCategories()
             ]);
-            
-            setUncategorizedTransactions(uncategorizedResponse);
+
+            setGroups(groupsResponse);
             setCategories(categoriesResponse);
         } catch (error) {
             console.error('Error loading data:', error);
@@ -52,44 +31,45 @@ const CategorizationReview: React.FC = () => {
         }
     };
 
-    const handleReviewTransaction = async () => {
-        if (!selectedTransaction || !selectedCategory) {
-            alert('Please select a transaction and category');
+    const clearSelection = () => {
+        setSelectedGroup(null);
+        setSelectedCategory('');
+    };
+
+    // Saving a rule can clear other groups too (name variants of the same merchant), so reload.
+    const handleReviewGroup = async () => {
+        if (!selectedGroup || !selectedCategory) {
+            alert('Please select a merchant and category');
             return;
         }
 
         try {
             setIsProcessing(true);
-            await apiService.reviewUncategorizedTransaction(selectedTransaction.id, selectedCategory);
-            
-            // Remove the reviewed transaction from the list
-            setUncategorizedTransactions(prev => 
-                prev.filter(t => t.id !== selectedTransaction.id)
-            );
-            
-            // Reset selection
-            setSelectedTransaction(null);
-            setSelectedCategory('');
-            
-            alert('Transaction categorized successfully!');
+            const { resolved } = await apiService.reviewGroup(selectedGroup.key, selectedCategory);
+            clearSelection();
+            await loadData();
+            alert(`Categorized ${resolved} transaction${resolved === 1 ? '' : 's'} as ${selectedCategory}`);
         } catch (error) {
-            console.error('Error reviewing transaction:', error);
-            alert('Failed to categorize transaction. Please try again.');
+            console.error('Error reviewing merchant group:', error);
+            alert('Failed to categorize. Please try again.');
         } finally {
             setIsProcessing(false);
         }
     };
 
-    const getConfidenceColor = (score: number) => {
-        if (score >= 0.7) return 'text-green-600';
-        if (score >= 0.4) return 'text-yellow-600';
-        return 'text-red-600';
-    };
-
-    const getConfidenceIcon = (score: number) => {
-        if (score >= 0.7) return <CheckCircle className="w-4 h-4" />;
-        if (score >= 0.4) return <AlertCircle className="w-4 h-4" />;
-        return <Clock className="w-4 h-4" />;
+    const handleRecategorize = async () => {
+        try {
+            setIsProcessing(true);
+            const { resolved, remaining } = await apiService.recategorizePending();
+            clearSelection();
+            await loadData();
+            alert(`Rules resolved ${resolved} transactions; ${remaining} still need review`);
+        } catch (error) {
+            console.error('Error re-running categorization:', error);
+            alert('Failed to re-run categorization. Please try again.');
+        } finally {
+            setIsProcessing(false);
+        }
     };
 
     const formatCurrency = (amount: number) => {
@@ -99,21 +79,7 @@ const CategorizationReview: React.FC = () => {
         }).format(Math.abs(amount));
     };
 
-    const formatDate = (dateString: string) => {
-        return new Date(dateString).toLocaleDateString('en-CA', {
-            year: 'numeric',
-            month: 'short',
-            day: 'numeric'
-        });
-    };
-
-    const parseSuggestedCategories = (categoriesJson: string): string[] => {
-        try {
-            return JSON.parse(categoriesJson);
-        } catch {
-            return [];
-        }
-    };
+    const pendingTransactions = groups.reduce((sum, group) => sum + group.count, 0);
 
     if (isLoading) {
         return (
@@ -130,16 +96,28 @@ const CategorizationReview: React.FC = () => {
                 <div>
                     <h2 className="text-3xl font-bold text-gray-900">Transaction Categorization Review</h2>
                     <p className="mt-2 text-gray-600">
-                        Review and categorize transactions that couldn't be automatically categorized
+                        One decision categorizes every transaction from that merchant, now and on future imports
                     </p>
                 </div>
-                <div className="text-right">
-                    <div className="text-2xl font-bold text-blue-600">{uncategorizedTransactions.length}</div>
-                    <div className="text-sm text-gray-500">Pending Review</div>
+                <div className="flex items-center gap-6">
+                    <button
+                        onClick={handleRecategorize}
+                        disabled={isProcessing}
+                        className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                    >
+                        <RefreshCw className="w-4 h-4" />
+                        Re-run rules
+                    </button>
+                    <div className="text-right">
+                        <div className="text-2xl font-bold text-blue-600">{groups.length}</div>
+                        <div className="text-sm text-gray-500">
+                            Merchants ({pendingTransactions} transactions)
+                        </div>
+                    </div>
                 </div>
             </div>
 
-            {uncategorizedTransactions.length === 0 ? (
+            {groups.length === 0 ? (
                 <div className="bg-white border border-gray-200 rounded-xl p-8 shadow-sm text-center">
                     <CheckCircle className="mx-auto h-12 w-12 text-green-500 mb-4" />
                     <h3 className="text-lg font-medium text-gray-900 mb-2">All Caught Up!</h3>
@@ -149,55 +127,50 @@ const CategorizationReview: React.FC = () => {
                 </div>
             ) : (
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    {/* Transaction List */}
+                    {/* Merchant List */}
                     <div className="lg:col-span-2">
                         <div className="bg-white border border-gray-200 rounded-xl shadow-sm">
                             <div className="px-6 py-4 border-b border-gray-200">
                                 <h3 className="text-lg font-semibold text-gray-900">
-                                    Uncategorized Transactions
+                                    Uncategorized Merchants
                                 </h3>
+                                <p className="text-sm text-gray-500">Largest spend first</p>
                             </div>
-                            <div className="divide-y divide-gray-200 max-h-96 overflow-y-auto">
-                                {uncategorizedTransactions.map((transaction) => (
+                            <div className="divide-y divide-gray-200 max-h-[32rem] overflow-y-auto">
+                                {groups.map((group) => (
                                     <div
-                                        key={transaction.id}
-                                        onClick={() => setSelectedTransaction(transaction)}
+                                        key={group.key}
+                                        onClick={() => {
+                                            setSelectedGroup(group);
+                                            setSelectedCategory(group.suggestions[0] ?? '');
+                                        }}
                                         className={`p-4 cursor-pointer transition-colors duration-200 hover:bg-gray-50 ${
-                                            selectedTransaction?.id === transaction.id ? 'bg-blue-50 border-r-4 border-blue-500' : ''
+                                            selectedGroup?.key === group.key ? 'bg-blue-50 border-r-4 border-blue-500' : ''
                                         }`}
                                     >
-                                        <div className="flex items-start justify-between">
-                                            <div className="flex-1">
+                                        <div className="flex items-start justify-between gap-4">
+                                            <div className="flex-1 min-w-0">
                                                 <div className="flex items-center gap-2 mb-1">
-                                                    <Building className="w-4 h-4 text-gray-400" />
-                                                    <span className="font-medium text-gray-900">
-                                                        {transaction.merchant}
+                                                    <Building className="w-4 h-4 text-gray-400 shrink-0" />
+                                                    <span className="font-medium text-gray-900 truncate">
+                                                        {group.merchant}
                                                     </span>
                                                 </div>
-                                                {transaction.details && (
-                                                    <p className="text-sm text-gray-600 mb-2">
-                                                        {transaction.details}
-                                                    </p>
-                                                )}
                                                 <div className="flex items-center gap-4 text-sm text-gray-500">
+                                                    <span>{group.count} transaction{group.count === 1 ? '' : 's'}</span>
                                                     <div className="flex items-center gap-1">
                                                         <DollarSign className="w-4 h-4" />
                                                         <span className="font-medium text-gray-900">
-                                                            {formatCurrency(transaction.amount)}
+                                                            {formatCurrency(group.total)}
                                                         </span>
-                                                    </div>
-                                                    <div className="flex items-center gap-1">
-                                                        <Calendar className="w-4 h-4" />
-                                                        <span>{formatDate(transaction.date)}</span>
                                                     </div>
                                                 </div>
                                             </div>
-                                            <div className={`flex items-center gap-1 ${getConfidenceColor(transaction.confidenceScore)}`}>
-                                                {getConfidenceIcon(transaction.confidenceScore)}
-                                                <span className="text-xs font-medium">
-                                                    {(transaction.confidenceScore * 100).toFixed(0)}%
+                                            {group.suggestions.length > 0 && (
+                                                <span className="text-xs px-2 py-1 rounded-full bg-gray-100 text-gray-700 shrink-0">
+                                                    {group.suggestions[0]}?
                                                 </span>
-                                            </div>
+                                            )}
                                         </div>
                                     </div>
                                 ))}
@@ -209,40 +182,38 @@ const CategorizationReview: React.FC = () => {
                     <div className="lg:col-span-1">
                         <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-6">
                             <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                                Categorize Transaction
+                                Categorize Merchant
                             </h3>
-                            
-                            {selectedTransaction ? (
+
+                            {selectedGroup ? (
                                 <div className="space-y-4">
-                                    {/* Transaction Details */}
                                     <div className="p-4 bg-gray-50 rounded-lg">
-                                        <h4 className="font-medium text-gray-900 mb-2">Selected Transaction</h4>
+                                        <h4 className="font-medium text-gray-900 mb-2">Selected Merchant</h4>
                                         <div className="space-y-2 text-sm">
                                             <div>
                                                 <span className="text-gray-600">Merchant:</span>
-                                                <span className="ml-2 font-medium">{selectedTransaction.merchant}</span>
+                                                <span className="ml-2 font-medium">{selectedGroup.merchant}</span>
                                             </div>
                                             <div>
-                                                <span className="text-gray-600">Amount:</span>
-                                                <span className="ml-2 font-medium">{formatCurrency(selectedTransaction.amount)}</span>
+                                                <span className="text-gray-600">Transactions:</span>
+                                                <span className="ml-2 font-medium">{selectedGroup.count}</span>
                                             </div>
                                             <div>
-                                                <span className="text-gray-600">Date:</span>
-                                                <span className="ml-2 font-medium">{formatDate(selectedTransaction.date)}</span>
+                                                <span className="text-gray-600">Total:</span>
+                                                <span className="ml-2 font-medium">{formatCurrency(selectedGroup.total)}</span>
                                             </div>
                                         </div>
                                     </div>
 
-                                    {/* Suggested Categories */}
-                                    {selectedTransaction.suggestedCategories && (
+                                    {selectedGroup.suggestions.length > 0 && (
                                         <div>
                                             <label className="block text-sm font-medium text-gray-700 mb-2">
                                                 Suggested Categories
                                             </label>
                                             <div className="flex flex-wrap gap-2 mb-4">
-                                                {parseSuggestedCategories(selectedTransaction.suggestedCategories).map((category, index) => (
+                                                {selectedGroup.suggestions.map((category) => (
                                                     <button
-                                                        key={index}
+                                                        key={category}
                                                         onClick={() => setSelectedCategory(category)}
                                                         className={`px-3 py-1 text-xs rounded-full border transition-colors duration-200 ${
                                                             selectedCategory === category
@@ -257,7 +228,6 @@ const CategorizationReview: React.FC = () => {
                                         </div>
                                     )}
 
-                                    {/* Category Selection */}
                                     <div>
                                         <label className="block text-sm font-medium text-gray-700 mb-2">
                                             Select Category
@@ -276,10 +246,9 @@ const CategorizationReview: React.FC = () => {
                                         </select>
                                     </div>
 
-                                    {/* Action Buttons */}
                                     <div className="space-y-2">
                                         <button
-                                            onClick={handleReviewTransaction}
+                                            onClick={handleReviewGroup}
                                             disabled={!selectedCategory || isProcessing}
                                             className={`w-full px-4 py-2 rounded-lg font-medium transition-colors duration-200 ${
                                                 selectedCategory && !isProcessing
@@ -287,13 +256,12 @@ const CategorizationReview: React.FC = () => {
                                                     : 'bg-gray-300 text-gray-500 cursor-not-allowed'
                                             }`}
                                         >
-                                            {isProcessing ? 'Processing...' : 'Categorize Transaction'}
+                                            {isProcessing
+                                                ? 'Processing...'
+                                                : `Categorize ${selectedGroup.count} transaction${selectedGroup.count === 1 ? '' : 's'}`}
                                         </button>
                                         <button
-                                            onClick={() => {
-                                                setSelectedTransaction(null);
-                                                setSelectedCategory('');
-                                            }}
+                                            onClick={clearSelection}
                                             className="w-full px-4 py-2 border border-gray-300 rounded-lg font-medium text-gray-700 hover:bg-gray-50 transition-colors duration-200"
                                         >
                                             Clear Selection
@@ -303,7 +271,7 @@ const CategorizationReview: React.FC = () => {
                             ) : (
                                 <div className="text-center text-gray-500 py-8">
                                     <AlertCircle className="mx-auto h-12 w-12 text-gray-400 mb-4" />
-                                    <p className="text-sm">Select a transaction to categorize it</p>
+                                    <p className="text-sm">Select a merchant to categorize it</p>
                                 </div>
                             )}
                         </div>
@@ -315,5 +283,3 @@ const CategorizationReview: React.FC = () => {
 };
 
 export default CategorizationReview;
-
-

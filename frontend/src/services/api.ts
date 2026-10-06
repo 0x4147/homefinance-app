@@ -65,6 +65,15 @@ export interface UncategorizedTransaction {
     reviewedAt?: string;
 }
 
+export interface ReviewGroup {
+    key: string;
+    merchant: string;
+    count: number;
+    total: number;
+    suggestions: string[];
+    ids: number[];
+}
+
 export interface Category {
     categoryId: number;
     name: string;
@@ -271,6 +280,30 @@ class ApiService {
             headers: {
                 'Content-Type': 'application/x-www-form-urlencoded',
             },
+        });
+    }
+
+    async getUncategorizedGroups(): Promise<ReviewGroup[]> {
+        log.info('Fetching uncategorized transactions grouped by merchant');
+        return this.makeRequest<ReviewGroup[]>('/categorization/uncategorized/groups');
+    }
+
+    async reviewGroup(merchantKey: string, assignedCategory: string): Promise<{ resolved: number }> {
+        log.info(`Categorizing merchant group ${merchantKey} as ${assignedCategory}`);
+        const params = new URLSearchParams({ merchantKey, assignedCategory });
+        return this.makeRequest<{ resolved: number }>('/categorization/review/group', {
+            method: 'POST',
+            body: params.toString(),
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+        });
+    }
+
+    async recategorizePending(): Promise<{ resolved: number; remaining: number }> {
+        log.info('Re-running categorization rules over pending reviews');
+        return this.makeRequest<{ resolved: number; remaining: number }>('/categorization/recategorize', {
+            method: 'POST',
         });
     }
 
