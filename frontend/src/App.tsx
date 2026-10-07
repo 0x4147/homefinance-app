@@ -7,6 +7,7 @@ import { apiService } from './services/api';
 import type { TransactionDto, MonthlyBalanceResponseDto, TransactionSummary, Transaction } from './services/api';
 import CategorizationReview from './components/CategorizationReview';
 import AddTransaction from './components/AddTransaction';
+import { LargestTransactionsCard, RecurringChargesCard } from './components/SpendingBehaviourCards';
 
 // --- Type Definitions for TypeScript ---
 // This defines the possible views our application can have.
@@ -250,6 +251,8 @@ const Dashboard = () => {
     const [monthlyData, setMonthlyData] = useState<{ labels: string[]; values: number[]; details?: Record<string, (TransactionDto | Transaction)[]>; originalKeys?: string[] }>({ labels: [], values: [] });
     const [trendData, setTrendData] = useState<TrendPoint[]>([]);
     const [trendDetails, setTrendDetails] = useState<Record<string, (TransactionDto | Transaction)[]>>({});
+    const [yearTransactions, setYearTransactions] = useState<TransactionDto[]>([]);
+    const [recentTransactions, setRecentTransactions] = useState<TransactionDto[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [modalOpen, setModalOpen] = useState(false);
     const [modalTitle, setModalTitle] = useState('');
@@ -259,11 +262,12 @@ const Dashboard = () => {
     useEffect(() => {
         const loadDashboardData = async () => {
             try {
-                // Get current date and 3 months ago
+                // Year to date: January 1st through today (local dates, not UTC)
                 const now = new Date();
-                const threeMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 3, 1);
-                const startDate = threeMonthsAgo.toISOString().split('T')[0];
-                const endDate = now.toISOString().split('T')[0];
+                const yearStart = new Date(now.getFullYear(), 0, 1);
+                const pad = (n: number) => String(n).padStart(2, '0');
+                const startDate = `${yearStart.getFullYear()}-01-01`;
+                const endDate = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
 
                 // Load category data
                 const categoryResponse = await apiService.getExpensesByCategoryTop10(startDate, endDate);
@@ -292,8 +296,8 @@ const Dashboard = () => {
                 }
 
                 // Load monthly data
-                const startMonth = threeMonthsAgo.toISOString().slice(0, 7); // YYYY-MM format
-                const endMonth = now.toISOString().slice(0, 7);
+                const startMonth = startDate.slice(0, 7); // YYYY-MM format
+                const endMonth = endDate.slice(0, 7);
                 const monthlyResponse = await apiService.getExpensesByMonth(startMonth, endMonth);
                 if (monthlyResponse) {
                     const keys = Object.keys(monthlyResponse.totals);
@@ -328,6 +332,12 @@ const Dashboard = () => {
                     setTrendData(points);
                     setTrendDetails(trendResponse.details || {});
                 }
+
+                // Raw transactions feed the largest-purchases and recurring-charges tiles
+                const fmtDay = (d: Date) => `${fmtKey(d)}-${String(d.getDate()).padStart(2, '0')}`;
+                const yearTxs = await apiService.getTransactionsByDateRange(fmtDay(trendStart), fmtDay(now));
+                setYearTransactions(yearTxs);
+                setRecentTransactions(yearTxs.filter(t => t.date >= startDate));
             } catch (error) {
                 console.error('Error loading dashboard data:', error);
             } finally {
@@ -369,7 +379,7 @@ const Dashboard = () => {
             
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                 <DonutChartCard
-                    title="Top10 Spending by Category (Past 3 Months)" 
+                    title="Top10 Spending by Category (Year to Date)" 
                     data={categoryData} 
                     onSliceClick={(_label, index) => {
                         const key = categoryData.originalKeys?.[index] || '';
@@ -377,7 +387,7 @@ const Dashboard = () => {
                     }}
                 />
                 <DonutChartCard 
-                    title="Top10 Spending by Merchant (Past 3 Months)" 
+                    title="Top10 Spending by Merchant (Year to Date)" 
                     data={merchantData} 
                     onSliceClick={(_label, index) => {
                         const key = merchantData.originalKeys?.[index] || '';
@@ -385,14 +395,17 @@ const Dashboard = () => {
                     }}
                 />
                 <DonutChartCard 
-                    title="Spending by Month (Past 3 Months)" 
+                    title="Spending by Month (Year to Date)" 
                     data={monthlyData} 
                     onSliceClick={(_label, index) => {
                         const key = monthlyData.originalKeys?.[index] || '';
                         openTransactions(`Transactions in ${monthlyData.labels[index]}`, monthlyData.details?.[key]);
                     }}
                 />
+                <LargestTransactionsCard transactions={recentTransactions} onSelect={openTransactions} />
             </div>
+
+            <RecurringChargesCard className="mt-8" transactions={yearTransactions} onSelect={openTransactions} />
 
             <TransactionsModal
                 title={modalTitle}
