@@ -1,9 +1,11 @@
 package ca.homefinance.controller;
 
+import ca.homefinance.dto.BalanceLineDto;
 import ca.homefinance.dto.MonthlyBalanceResponseDto;
 import ca.homefinance.dto.TransactionDto;
 import ca.homefinance.dto.TransactionSummary;
 import ca.homefinance.entity.Transaction;
+import ca.homefinance.service.SettlementService;
 import ca.homefinance.service.TransactionService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -20,6 +22,7 @@ import java.util.List;
 public class TransactionController {
 
     private final TransactionService transactionService;
+    private final SettlementService settlementService;
 
     @GetMapping("/getAllTransactions")
     public ResponseEntity<List<Transaction>> getAllTransactions() {
@@ -40,10 +43,17 @@ public class TransactionController {
     @GetMapping("/getMonthlyBalance")
     public ResponseEntity<MonthlyBalanceResponseDto> getMonthlyBalance(@RequestParam String month, @RequestParam String year) {
         try {
-            return ResponseEntity.ok(transactionService.getMonthlyBalance(Integer.parseInt(month), Integer.parseInt(year)));
+            return ResponseEntity.ok(settlementService.getMonthlyBalanceWithStatus(Integer.parseInt(month), Integer.parseInt(year)));
         } catch (NumberFormatException | DateTimeException e) {
             return ResponseEntity.badRequest().build();
         }
+    }
+
+    @GetMapping("/getMonthlyBalanceTransactions")
+    public ResponseEntity<List<BalanceLineDto>> getMonthlyBalanceTransactions(@RequestParam int month,
+                                                                              @RequestParam int year,
+                                                                              @RequestParam String person) {
+        return ResponseEntity.ok(transactionService.getMonthlyBalanceTransactions(month, year, person));
     }
 
     @GetMapping("/getExpensesByCategory")

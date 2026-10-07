@@ -56,7 +56,6 @@ CREATE TABLE receipt (
     FOREIGN KEY (transaction_id) REFERENCES transaction(transaction_id) ON DELETE CASCADE
 );
 
--- Table to track payments between people (for shared expenses or income)
 -- Cards (as identified in bank exports, e.g. a masked card number) mapped to the person who holds them
 CREATE TABLE person_card (
     person_card_id INT AUTO_INCREMENT PRIMARY KEY,
@@ -66,18 +65,24 @@ CREATE TABLE person_card (
     FOREIGN KEY (person_id) REFERENCES person(person_id) ON DELETE CASCADE
 );
 
-CREATE TABLE payment (
-    payment_id INT AUTO_INCREMENT PRIMARY KEY,
+-- One row per calendar month recording that the month's shared-expense balance was paid
+CREATE TABLE settlement (
+    settlement_id INT AUTO_INCREMENT PRIMARY KEY,
+    period_year SMALLINT NOT NULL,
+    period_month TINYINT NOT NULL,
     amount DECIMAL(10, 2) NOT NULL,
-    date DATE NOT NULL,
-	start_date_range DATE,
-	end_date_range DATE,
-    from_person_id INT, -- Who made the payment
-    to_person_id INT, -- Who received the payment
-    transaction_id INT, -- Associated transaction (if any)
-    FOREIGN KEY (from_person_id) REFERENCES person(person_id) ON DELETE CASCADE,
-    FOREIGN KEY (to_person_id) REFERENCES person(person_id) ON DELETE CASCADE,
-    FOREIGN KEY (transaction_id) REFERENCES transaction(transaction_id) ON DELETE SET NULL
+    paid_date DATE NOT NULL,
+    from_person_id INT NOT NULL, -- Person who owed and paid
+    to_person_id INT NOT NULL, -- Person who received the payment
+    notes VARCHAR(500),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT uq_settlement_period UNIQUE (period_year, period_month),
+    CONSTRAINT chk_settlement_amount CHECK (amount > 0),
+    CONSTRAINT chk_settlement_month CHECK (period_month BETWEEN 1 AND 12),
+    CONSTRAINT chk_settlement_people CHECK (from_person_id <> to_person_id),
+    FOREIGN KEY (from_person_id) REFERENCES person(person_id),
+    FOREIGN KEY (to_person_id) REFERENCES person(person_id)
 );
 
 -- Categorization rules for merchants
@@ -96,9 +101,6 @@ CREATE INDEX idx_transaction_person_id ON transaction(person_id);
 CREATE INDEX idx_transaction_uncat_id ON transaction(uncategorized_transaction_id);
 CREATE INDEX idx_receipt_transaction_id ON receipt(transaction_id);
 CREATE INDEX idx_person_card_person_id ON person_card(person_id);
-CREATE INDEX idx_payment_from_person_id ON payment(from_person_id);
-CREATE INDEX idx_payment_to_person_id ON payment(to_person_id);
-CREATE INDEX idx_payment_transaction_id ON payment(transaction_id);
 
 CREATE INDEX idx_uncategorized_reviewed ON uncategorized_transaction(reviewed);
 CREATE INDEX idx_uncategorized_created_at ON uncategorized_transaction(created_at);

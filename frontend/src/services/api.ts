@@ -43,12 +43,41 @@ export interface TransactionSummary {
     details: { [key: string]: Transaction[] };
 }
 
+export interface SettlementDto {
+    year: number;
+    month: number;
+    amount: number;
+    paidDate: string;
+    notes?: string | null;
+    from: string;
+    to: string;
+}
+
+export interface SettlementRequest {
+    amount: number;
+    paidDate: string;
+    notes?: string;
+}
+
+export interface BalanceLine {
+    transaction: TransactionDto;
+    contribution: number;
+    kind: string;
+}
+
+export type SettlementStatus = 'SETTLED' | 'UNSETTLED' | 'EVEN';
+
 export interface MonthlyBalanceResponseDto {
     monthAndYear: string;
-    whoOwes: string;
+    whoOwes: string | null;
     balanceAmount: number;
     asankaPaid: number;
     divyaPaid: number;
+    month: number;
+    year: number;
+    status: SettlementStatus;
+    settlement?: SettlementDto | null;
+    settlementMismatch: boolean;
 }
 
 export interface UncategorizedTransaction {
@@ -120,6 +149,10 @@ class ApiService {
                 throw new Error(`API request failed: ${response.status} ${response.statusText} - ${errorText}`);
             }
 
+            if (response.status === 204) {
+                return undefined as T;
+            }
+
             const data = await response.json();
             log.debug('Response data:', data);
             return data;
@@ -164,6 +197,31 @@ class ApiService {
         log.info(`Fetching monthly balance for ${month}/${year}`);
         const params = new URLSearchParams({ month, year });
         return this.makeRequest<MonthlyBalanceResponseDto>(`/transaction/getMonthlyBalance?${params}`);
+    }
+
+    // Transactions behind one person's "paid" figure for a month
+    async getMonthlyBalanceTransactions(month: number, year: number, person: 'ASANKA' | 'DIVYA'): Promise<BalanceLine[]> {
+        const params = new URLSearchParams({ month: String(month), year: String(year), person });
+        return this.makeRequest<BalanceLine[]>(`/transaction/getMonthlyBalanceTransactions?${params}`);
+    }
+
+    // Settlements (recorded payments of a month's balance)
+    async getSettlements(year: number): Promise<SettlementDto[]> {
+        return this.makeRequest<SettlementDto[]>(`/settlement?year=${year}`);
+    }
+
+    // Creates the month's settlement, or replaces it if one exists
+    async saveSettlement(year: number, month: number, body: SettlementRequest): Promise<SettlementDto> {
+        log.info(`Saving settlement for ${month}/${year}`, body);
+        return this.makeRequest<SettlementDto>(`/settlement/${year}/${month}`, {
+            method: 'PUT',
+            body: JSON.stringify(body),
+        });
+    }
+
+    async deleteSettlement(year: number, month: number): Promise<void> {
+        log.info(`Deleting settlement for ${month}/${year}`);
+        return this.makeRequest<void>(`/settlement/${year}/${month}`, { method: 'DELETE' });
     }
 
     // Get expenses by category

@@ -4,6 +4,7 @@ import ca.homefinance.dto.MonthlyBalanceResponseDto;
 import ca.homefinance.dto.TransactionDto;
 import ca.homefinance.dto.TransactionSummary;
 import ca.homefinance.entity.Transaction;
+import ca.homefinance.service.SettlementService;
 import ca.homefinance.service.TransactionService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
@@ -38,6 +39,9 @@ class TransactionControllerTest {
 
     @MockBean
     private TransactionService transactionService;
+
+    @MockBean
+    private SettlementService settlementService;
 
     @Test
     void getAllTransactions_ShouldDelegateToService() throws Exception {
@@ -83,7 +87,7 @@ class TransactionControllerTest {
         response.setAsankaPaid(BigDecimal.ZERO);
         response.setDivyaPaid(BigDecimal.ZERO);
         response.setMonthAndYear("1, 2024");
-        when(transactionService.getMonthlyBalance(1, 2024)).thenReturn(response);
+        when(settlementService.getMonthlyBalanceWithStatus(1, 2024)).thenReturn(response);
 
         mockMvc.perform(get("/api/v1/transaction/getMonthlyBalance")
                         .param("month", "1")
@@ -102,7 +106,7 @@ class TransactionControllerTest {
 
     @Test
     void getMonthlyBalance_MonthOutOfRange_ShouldReturnBadRequest() throws Exception {
-        when(transactionService.getMonthlyBalance(13, 2024))
+        when(settlementService.getMonthlyBalanceWithStatus(13, 2024))
                 .thenThrow(new java.time.DateTimeException("Invalid value for MonthOfYear: 13"));
 
         mockMvc.perform(get("/api/v1/transaction/getMonthlyBalance")
@@ -113,7 +117,7 @@ class TransactionControllerTest {
 
     @Test
     void getMonthlyBalance_MonthZero_ShouldReturnBadRequest() throws Exception {
-        when(transactionService.getMonthlyBalance(0, 2024))
+        when(settlementService.getMonthlyBalanceWithStatus(0, 2024))
                 .thenThrow(new java.time.DateTimeException("Invalid value for MonthOfYear: 0"));
 
         mockMvc.perform(get("/api/v1/transaction/getMonthlyBalance")

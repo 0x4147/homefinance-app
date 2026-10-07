@@ -1,5 +1,6 @@
 package ca.homefinance.service;
 
+import ca.homefinance.dto.BalanceLineDto;
 import ca.homefinance.dto.MonthlyBalanceResponseDto;
 import ca.homefinance.dto.TransactionDto;
 import ca.homefinance.dto.TransactionSummary;
@@ -129,7 +130,13 @@ public class TransactionService {
         return transactionRepository.searchTransactionByDateRangeAccountTypeTransactionType(startDate, endDate, accounts, transactionTypes);
     }
 
-    public MonthlyBalanceResponseDto getMonthlyBalance(int month, int year) {
+    /** The transactions that make up a month's balance, grouped by how each group contributes. */
+    private record BalanceInputs(List<Transaction> expenses, List<Transaction> cardSpending,
+                                 List<Transaction> rentalBillIncome, List<Transaction> rentalRentIncome,
+                                 List<Transaction> billsPaid) {
+    }
+
+    private BalanceInputs loadBalanceInputs(int month, int year) {
         LocalDate startDate = LocalDate.of(year, month, 1);
         LocalDate endDate = startDate.withDayOfMonth(startDate.lengthOfMonth());
 
@@ -163,13 +170,61 @@ public class TransactionService {
                 Arrays.asList(Transaction.AccountType.DIVYA, Transaction.AccountType.ASANKA),
                 Arrays.asList(Transaction.TransactionType.BILL));
 
-        BigDecimal[] expenseTotals = splitByAccount(expenses);
-        BigDecimal cardSpendingNet = cardSpending.stream()
+        return new BalanceInputs(expenses, cardSpending, rentalBillIncome, rentalRentIncome, billsPaid);
+    }
+
+    /**
+     * The transactions behind one person's "paid" figure; the contributions sum to
+     * {@code asankaPaid} / {@code divyaPaid} from {@link #getMonthlyBalance}.
+     */
+    public List<BalanceLineDto> getMonthlyBalanceTransactions(int month, int year, String person) {
+        if (month < 1 || month > 12) {
+            throw badRequest("Month must be between 1 and 12");
+        }
+        Transaction.AccountType account;
+        try {
+            account = Transaction.AccountType.valueOf(person == null ? "" : person.toUpperCase());
+        } catch (IllegalArgumentException e) {
+            throw badRequest("Invalid person: " + person);
+        }
+        if (account != Transaction.AccountType.ASANKA && account != Transaction.AccountType.DIVYA) {
+            throw badRequest("Invalid person: " + person);
+        }
+
+        BalanceInputs inputs = loadBalanceInputs(month, year);
+        List<BalanceLineDto> lines = new ArrayList<>();
+        addBalanceLines(lines, inputs.expenses(), account, "EXPENSE", false);
+        addBalanceLines(lines, inputs.billsPaid(), account, "BILL", false);
+        addBalanceLines(lines, inputs.rentalBillIncome(), account, "RENTAL_BILL_INCOME", true);
+        addBalanceLines(lines, inputs.rentalRentIncome(), account, "RENTAL_RENT_INCOME", true);
+        if (account == Transaction.AccountType.DIVYA) {
+            // Shared CIBC/AMEX spending is attributed to Divya, whichever card was used.
+            addBalanceLines(lines, inputs.cardSpending(), null, "CARD_SPENDING", false);
+        }
+        lines.sort(Comparator.comparing((BalanceLineDto l) -> l.getTransaction().getDate()));
+        return lines;
+    }
+
+    private void addBalanceLines(List<BalanceLineDto> lines, List<Transaction> source,
+                                 Transaction.AccountType account, String kind, boolean negate) {
+        for (Transaction tx : source) {
+            if (account != null && tx.getAccount() != account) {
+                continue;
+            }
+            lines.add(new BalanceLineDto(toDto(tx), negate ? tx.getAmount().negate() : tx.getAmount(), kind));
+        }
+    }
+
+    public MonthlyBalanceResponseDto getMonthlyBalance(int month, int year) {
+        BalanceInputs inputs = loadBalanceInputs(month, year);
+
+        BigDecimal[] expenseTotals = splitByAccount(inputs.expenses());
+        BigDecimal cardSpendingNet = inputs.cardSpending().stream()
                 .map(Transaction::getAmount)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
-        BigDecimal[] rentalBillTotals = splitByAccount(rentalBillIncome);
-        BigDecimal[] rentalRentTotals = splitByAccount(rentalRentIncome);
-        BigDecimal[] billTotals = splitByAccount(billsPaid);
+        BigDecimal[] rentalBillTotals = splitByAccount(inputs.rentalBillIncome());
+        BigDecimal[] rentalRentTotals = splitByAccount(inputs.rentalRentIncome());
+        BigDecimal[] billTotals = splitByAccount(inputs.billsPaid());
 
         BigDecimal totalExpensesMinusIncomeAsanka = expenseTotals[0]
                 .add(billTotals[0])
@@ -254,7 +309,7 @@ public class TransactionService {
                 tx.getAccount().name(),
                 tx.getTransactionType().name(),
                 tx.getCategory() != null ? tx.getCategory().getName() : "Unknown",
-                tx.getPerson().getName()
+                tx.getPerson() != null ? tx.getPerson().getName() : ""
         );
     }
 
