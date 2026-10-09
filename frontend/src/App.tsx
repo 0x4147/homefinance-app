@@ -418,8 +418,16 @@ const Dashboard = () => {
     );
 };
 
+// Upload sources; sourceType must match the backend's ALLOWED_SOURCES
+const UPLOAD_SOURCES = [
+    { label: 'Amex', sourceType: 'amex' },
+    { label: 'CIBC', sourceType: 'cibc' },
+    { label: 'Asanka shared bills', sourceType: 'asanka-shared' },
+    { label: 'Divya shared bills', sourceType: 'divya-shared' },
+] as const;
+
 const AddBulkTransactions = () => {
-    const [selectedBank, setSelectedBank] = useState<'Amex' | 'CIBC' | null>(null);
+    const [selectedBank, setSelectedBank] = useState<string | null>(null);
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
     // Console logging utility for component
@@ -462,7 +470,10 @@ const AddBulkTransactions = () => {
         }
         
         try {
-            const sourceType = selectedBank === 'Amex' ? 'amex' : 'cibc';
+            const sourceType = UPLOAD_SOURCES.find(source => source.label === selectedBank)?.sourceType;
+            if (!sourceType) {
+                throw new Error(`Unknown source: ${selectedBank}`);
+            }
             log.info(`Preparing to upload file with source type: ${sourceType}`);
             
             const result = await apiService.uploadTransactionFile(selectedFile, sourceType);
@@ -486,34 +497,24 @@ const AddBulkTransactions = () => {
             
             {/* Bank Selection */}
             <div className="mb-6">
-                <label className="block text-sm font-medium text-gray-700 mb-3">Select Bank</label>
-                <div className="flex space-x-4">
-                    <button
-                        onClick={() => {
-                            log.info('Bank selected: Amex');
-                            setSelectedBank('Amex');
-                        }}
-                        className={`px-6 py-3 rounded-lg font-medium transition-colors duration-200 ${
-                            selectedBank === 'Amex'
-                                ? 'bg-blue-600 text-white shadow-md'
-                                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                        }`}
-                    >
-                        Amex
-                    </button>
-                    <button
-                        onClick={() => {
-                            log.info('Bank selected: CIBC');
-                            setSelectedBank('CIBC');
-                        }}
-                        className={`px-6 py-3 rounded-lg font-medium transition-colors duration-200 ${
-                            selectedBank === 'CIBC'
-                                ? 'bg-blue-600 text-white shadow-md'
-                                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                        }`}
-                    >
-                        CIBC
-                    </button>
+                <label className="block text-sm font-medium text-gray-700 mb-3">Select Source</label>
+                <div className="flex flex-wrap gap-4">
+                    {UPLOAD_SOURCES.map(({ label }) => (
+                        <button
+                            key={label}
+                            onClick={() => {
+                                log.info(`Source selected: ${label}`);
+                                setSelectedBank(label);
+                            }}
+                            className={`px-6 py-3 rounded-lg font-medium transition-colors duration-200 ${
+                                selectedBank === label
+                                    ? 'bg-blue-600 text-white shadow-md'
+                                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                            }`}
+                        >
+                            {label}
+                        </button>
+                    ))}
                 </div>
             </div>
 

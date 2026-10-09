@@ -54,6 +54,10 @@ public class Transaction {
     @JoinColumn(name = "person_id", referencedColumnName = "person_id")
     private Person person;
 
+    /** Counts toward the monthly shared-expense balance; false for one person's own spending. */
+    @Column(name = "shared", nullable = false)
+    private boolean shared = true;
+
     public enum AccountType {
         CIBC, AMEX, ASANKA, DIVYA
     }

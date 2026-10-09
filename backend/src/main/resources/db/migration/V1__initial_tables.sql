@@ -41,6 +41,7 @@ CREATE TABLE transaction (
     account VARCHAR(50) NOT NULL,
     transaction_type VARCHAR(50) NOT NULL, -- Defines type
     person_id INT, -- Relationship with the person involved
+    shared BOOLEAN NOT NULL DEFAULT TRUE, -- Takes part in the shared-expense balance; FALSE for one person's own spending
     FOREIGN KEY (category_id) REFERENCES category(category_id) ON DELETE SET NULL,
     FOREIGN KEY (person_id) REFERENCES person(person_id) ON DELETE SET NULL,
     FOREIGN KEY (uncategorized_transaction_id) REFERENCES uncategorized_transaction(id) ON DELETE SET NULL

@@ -3,6 +3,7 @@ package ca.homefinance.batch;
 import ca.homefinance.entity.Transaction;
 import ca.homefinance.mapper.AMEXTransactionFieldMapper;
 import ca.homefinance.mapper.CIBCTransactionFieldMapper;
+import ca.homefinance.mapper.SharedBillTransactionFieldMapper;
 import ca.homefinance.repository.TransactionRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -11,7 +12,6 @@ import org.springframework.batch.core.Step;
 import org.springframework.batch.core.configuration.annotation.EnableBatchProcessing;
 import org.springframework.batch.core.job.builder.JobBuilder;
 import org.springframework.batch.core.step.builder.StepBuilder;
-import org.springframework.batch.item.ItemReader;
 import org.springframework.batch.item.file.FlatFileItemReader;
 import org.springframework.batch.item.file.mapping.DefaultLineMapper;
 import org.springframework.batch.item.file.transform.DelimitedLineTokenizer;
@@ -34,16 +34,19 @@ public class BatchConfig {
     private final TransactionRepository transactionRepository;
     private final CIBCTransactionFieldMapper cibcTransactionFieldMapper;
     private final AMEXTransactionFieldMapper amexTransactionFieldMapper;
+    private final SharedBillTransactionFieldMapper sharedBillTransactionFieldMapper;
 
     @Autowired
     public BatchConfig (TransactionWriter writer,
                         TransactionRepository transactionRepository,
                         CIBCTransactionFieldMapper cibcTransactionFieldMapper,
-                        AMEXTransactionFieldMapper amexTransactionFieldMapper){
+                        AMEXTransactionFieldMapper amexTransactionFieldMapper,
+                        SharedBillTransactionFieldMapper sharedBillTransactionFieldMapper){
         this.writer = writer;
         this.transactionRepository = transactionRepository;
         this.cibcTransactionFieldMapper = cibcTransactionFieldMapper;
         this.amexTransactionFieldMapper = amexTransactionFieldMapper;
+        this.sharedBillTransactionFieldMapper = sharedBillTransactionFieldMapper;
     }
 
     @Bean
@@ -103,6 +106,15 @@ public class BatchConfig {
             logger.info("Configuring reader for CIBC format");
             tokenizer.setNames("date", "entity", "amount out", "amount in", "person");
             lineMapper.setFieldSetMapper(cibcTransactionFieldMapper);
+        } else if ("asanka-shared".equalsIgnoreCase(sourceType) || "divya-shared".equalsIgnoreCase(sourceType)) {
+            logger.info("Configuring reader for shared bills format ({})", sourceType);
+            // No header row; details and category are optional trailing columns
+            tokenizer.setStrict(false);
+            tokenizer.setNames("date", "entity", "amount", "details", "category");
+            Transaction.AccountType account = "asanka-shared".equalsIgnoreCase(sourceType)
+                    ? Transaction.AccountType.ASANKA
+                    : Transaction.AccountType.DIVYA;
+            lineMapper.setFieldSetMapper(sharedBillTransactionFieldMapper.forAccount(account));
         } else {
             logger.error("Unknown source type: {}", sourceType);
             throw new IllegalArgumentException("Unknown source type: " + sourceType);

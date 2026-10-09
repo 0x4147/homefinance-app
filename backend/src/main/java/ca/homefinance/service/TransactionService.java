@@ -140,10 +140,10 @@ public class TransactionService {
         LocalDate startDate = LocalDate.of(year, month, 1);
         LocalDate endDate = startDate.withDayOfMonth(startDate.lengthOfMonth());
 
-        List<Transaction> expenses = searchTransactionByDateRangeAccountTypeTransactionType(
+        List<Transaction> expenses = sharedOnly(searchTransactionByDateRangeAccountTypeTransactionType(
                 startDate, endDate,
                 Arrays.asList(Transaction.AccountType.ASANKA, Transaction.AccountType.DIVYA),
-                Arrays.asList(Transaction.TransactionType.EXPENSE));
+                Arrays.asList(Transaction.TransactionType.EXPENSE)));
 
         // CIBC and AMEX hold shared/common purchases only, regardless of whose physical card was used,
         // so every purchase (and its refunds) counts toward the shared pool - not just the CARDPAYMENT
@@ -155,22 +155,27 @@ public class TransactionService {
                 Arrays.asList(Transaction.AccountType.CIBC, Transaction.AccountType.AMEX),
                 Arrays.asList(Transaction.TransactionType.EXPENSE, Transaction.TransactionType.REFUND));
 
-        List<Transaction> rentalBillIncome = searchTransactionByDateRangeAccountTypeTransactionType(
+        List<Transaction> rentalBillIncome = sharedOnly(searchTransactionByDateRangeAccountTypeTransactionType(
                 startDate, endDate,
                 Arrays.asList(Transaction.AccountType.DIVYA, Transaction.AccountType.ASANKA),
-                Arrays.asList(Transaction.TransactionType.RENTALBILLINCOME));
+                Arrays.asList(Transaction.TransactionType.RENTALBILLINCOME)));
 
-        List<Transaction> rentalRentIncome = searchTransactionByDateRangeAccountTypeTransactionType(
+        List<Transaction> rentalRentIncome = sharedOnly(searchTransactionByDateRangeAccountTypeTransactionType(
                 startDate, endDate,
                 Arrays.asList(Transaction.AccountType.DIVYA, Transaction.AccountType.ASANKA),
-                Arrays.asList(Transaction.TransactionType.RENTALRENTINCOME));
+                Arrays.asList(Transaction.TransactionType.RENTALRENTINCOME)));
 
-        List<Transaction> billsPaid = searchTransactionByDateRangeAccountTypeTransactionType(
+        List<Transaction> billsPaid = sharedOnly(searchTransactionByDateRangeAccountTypeTransactionType(
                 startDate, endDate,
                 Arrays.asList(Transaction.AccountType.DIVYA, Transaction.AccountType.ASANKA),
-                Arrays.asList(Transaction.TransactionType.BILL));
+                Arrays.asList(Transaction.TransactionType.BILL)));
 
         return new BalanceInputs(expenses, cardSpending, rentalBillIncome, rentalRentIncome, billsPaid);
+    }
+
+    /** Personal (non-shared) transactions never take part in the shared-expense balance. */
+    private static List<Transaction> sharedOnly(List<Transaction> transactions) {
+        return transactions.stream().filter(Transaction::isShared).collect(Collectors.toList());
     }
 
     /**
@@ -321,7 +326,8 @@ public class TransactionService {
         Map<String, List<Transaction>> details = detailsMapSupplier.get();
 
         for (Transaction tx : transactions) {
-            if (tx.getTransactionType() == Transaction.TransactionType.EXPENSE) {
+            if (tx.getTransactionType() == Transaction.TransactionType.EXPENSE
+                    || tx.getTransactionType() == Transaction.TransactionType.BILL) {
                 String key = keyExtractor.apply(tx);
                 totals.merge(key, tx.getAmount(), BigDecimal::add);
                 details.computeIfAbsent(key, k -> new ArrayList<>()).add(tx);

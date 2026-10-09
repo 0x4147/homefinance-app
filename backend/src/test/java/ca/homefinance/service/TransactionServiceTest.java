@@ -669,6 +669,52 @@ class TransactionServiceTest {
     }
 
     @Test
+    void getMonthlyBalance_PersonalTransactions_ShouldBeExcludedFromBalance() {
+        Transaction sharedBill = createTransaction(1, new BigDecimal("100.00"),
+                LocalDate.of(2024, 1, 15), "Enbridge Gas", null,
+                Transaction.AccountType.ASANKA, Transaction.TransactionType.BILL, asanka);
+        Transaction personalExpense = createTransaction(2, new BigDecimal("500.00"),
+                LocalDate.of(2024, 1, 16), "Gym gear", null,
+                Transaction.AccountType.ASANKA, Transaction.TransactionType.EXPENSE, asanka);
+        personalExpense.setShared(false);
+
+        // Catch-all first: later, more specific stubs take precedence over it.
+        when(transactionRepository.searchTransactionByDateRangeAccountTypeTransactionType(any(), any(), any(), any()))
+                .thenReturn(Collections.emptyList());
+        when(transactionRepository.searchTransactionByDateRangeAccountTypeTransactionType(
+                any(LocalDate.class), any(LocalDate.class),
+                eq(Arrays.asList(Transaction.AccountType.ASANKA, Transaction.AccountType.DIVYA)),
+                eq(Arrays.asList(Transaction.TransactionType.EXPENSE))))
+                .thenReturn(Arrays.asList(personalExpense));
+        when(transactionRepository.searchTransactionByDateRangeAccountTypeTransactionType(
+                any(LocalDate.class), any(LocalDate.class),
+                eq(Arrays.asList(Transaction.AccountType.DIVYA, Transaction.AccountType.ASANKA)),
+                eq(Arrays.asList(Transaction.TransactionType.BILL))))
+                .thenReturn(Arrays.asList(sharedBill));
+
+        MonthlyBalanceResponseDto result = transactionService.getMonthlyBalance(1, 2024);
+
+        // Only the $100 shared bill counts; the $500 personal expense must not be split with Divya.
+        assertEquals(0, new BigDecimal("100.00").compareTo(result.getAsankaPaid()));
+        assertEquals(0, new BigDecimal("50").compareTo(result.getBalanceAmount()));
+        assertEquals("Divya", result.getWhoOwes());
+    }
+
+    @Test
+    void getExpensesByCategory_ShouldIncludeBills() {
+        Category utilities = category(4, "Utilities");
+        Transaction bill = createTransaction(1, new BigDecimal("80.00"),
+                LocalDate.of(2024, 1, 15), "Enbridge Gas", null,
+                Transaction.AccountType.ASANKA, Transaction.TransactionType.BILL, asanka);
+        bill.setCategory(utilities);
+        when(transactionRepository.findByDateBetween(any(), any())).thenReturn(Arrays.asList(bill));
+
+        var summary = transactionService.getExpensesByCategory(LocalDate.of(2024, 1, 1), LocalDate.of(2024, 1, 31));
+
+        assertEquals(0, new BigDecimal("80.00").compareTo(summary.getTotals().get("Utilities")));
+    }
+
+    @Test
     void getMonthlyBalance_InvalidMonth_ShouldThrowException() {
         assertThrows(java.time.DateTimeException.class, () -> transactionService.getMonthlyBalance(13, 2024));
     }
