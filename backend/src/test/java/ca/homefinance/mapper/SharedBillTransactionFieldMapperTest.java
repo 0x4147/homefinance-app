@@ -59,7 +59,7 @@ class SharedBillTransactionFieldMapperTest {
         when(categoryRepository.findByName("Utilities")).thenReturn(utilities);
 
         Transaction result = mapper.mapFieldSet(
-                fieldSet("04-12-2023", "Enbridge Gas", "$1,234.50", "April bill", "Utilities"), Transaction.AccountType.ASANKA);
+                fieldSet("04/12/2023", "Enbridge Gas", "$1,234.50", "April bill", "Utilities"), Transaction.AccountType.ASANKA);
 
         assertEquals(LocalDate.of(2023, 4, 12), result.getDate());
         assertEquals("Enbridge Gas", result.getEntity());
@@ -85,7 +85,7 @@ class SharedBillTransactionFieldMapperTest {
         DelimitedLineTokenizer tokenizer = new DelimitedLineTokenizer();
         tokenizer.setStrict(false);
         tokenizer.setNames(NAMES);
-        FieldSet fieldSet = tokenizer.tokenize("04-12-2023,Rogers,89.99");
+        FieldSet fieldSet = tokenizer.tokenize("04/12/2023,Rogers,89.99");
 
         Transaction result = mapper.mapFieldSet(fieldSet, Transaction.AccountType.ASANKA);
 
@@ -103,9 +103,47 @@ class SharedBillTransactionFieldMapperTest {
         when(categorizationService.categorizeTransaction(any(), any(), any(), any())).thenReturn(fallback);
 
         Transaction result = mapper.mapFieldSet(
-                fieldSet("04-12-2023", "Rogers", "89.99", "", "Nope"), Transaction.AccountType.ASANKA);
+                fieldSet("04/12/2023", "Rogers", "89.99", "", "Nope"), Transaction.AccountType.ASANKA);
 
         assertSame(fallback, result.getCategory());
+    }
+
+    @Test
+    void mapFieldSet_MonthFirstDate_ShouldParseAsMonthDayYear() {
+        when(personRepository.findByCode("ASANKA")).thenReturn(Optional.of(asanka));
+        Category utilities = new Category();
+        utilities.setCategoryId(4);
+        when(categoryRepository.findByName("Utilities")).thenReturn(utilities);
+
+        Transaction result = mapper.mapFieldSet(
+                fieldSet("10/08/2026", "Enbridge Gas", "50.00", "", "Utilities"), Transaction.AccountType.ASANKA);
+
+        assertEquals(LocalDate.of(2026, 10, 8), result.getDate());
+    }
+
+    @Test
+    void mapFieldSet_SampleCsvRows_ShouldParse() {
+        when(personRepository.findByCode("ASANKA")).thenReturn(Optional.of(asanka));
+        Category utilityBill = new Category();
+        utilityBill.setCategoryId(5);
+        utilityBill.setName("Utility Bill");
+        when(categoryRepository.findByName("Utility Bill")).thenReturn(utilityBill);
+
+        DelimitedLineTokenizer tokenizer = new DelimitedLineTokenizer();
+        tokenizer.setStrict(false);
+        tokenizer.setNames(NAMES);
+
+        Transaction first = mapper.mapFieldSet(
+                tokenizer.tokenize("10/08/2026,Alectra,106.49,Electricity bill,Utility Bill"), Transaction.AccountType.ASANKA);
+        Transaction second = mapper.mapFieldSet(
+                tokenizer.tokenize("09/08/2026,Alectra,141.54,Electricity bill,Utility Bill"), Transaction.AccountType.ASANKA);
+
+        assertEquals(LocalDate.of(2026, 10, 8), first.getDate());
+        assertEquals(0, new BigDecimal("106.49").compareTo(first.getAmount()));
+        assertEquals("Electricity bill", first.getDetails());
+        assertSame(utilityBill, first.getCategory());
+        assertEquals(LocalDate.of(2026, 9, 8), second.getDate());
+        assertEquals(0, new BigDecimal("141.54").compareTo(second.getAmount()));
     }
 
     @Test
@@ -119,7 +157,7 @@ class SharedBillTransactionFieldMapperTest {
         when(categorizationService.categorizeTransaction(any(), any(), any(), any())).thenReturn(any);
 
         Transaction result = mapper.forAccount(Transaction.AccountType.DIVYA)
-                .mapFieldSet(fieldSet("04-12-2023", "Rogers", "89.99", "", ""));
+                .mapFieldSet(fieldSet("04/12/2023", "Rogers", "89.99", "", ""));
 
         assertEquals(Transaction.AccountType.DIVYA, result.getAccount());
         assertSame(divya, result.getPerson());

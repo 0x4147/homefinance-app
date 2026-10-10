@@ -24,12 +24,13 @@ VALUES
     ('Amazon', 'EXPENSE'),
     ('Temu', 'EXPENSE'),
     ('Card payment', 'INCOME'),
-    ('Card loan', 'EXPENSE'),
+    ('Car loan', 'EXPENSE'),
     ('Alcohol', 'EXPENSE'),
     ('Clothing', 'EXPENSE'),
     ('Shopping', 'EXPENSE'),
     ('Travel', 'EXPENSE'),
-    ('Bank Fees', 'EXPENSE');
+    ('Bank Fees', 'EXPENSE'),
+    ('Child Care', 'EXPENSE');
 
 
 -- PersonCard

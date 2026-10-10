@@ -28,8 +28,8 @@ public class SharedBillTransactionFieldMapper {
 
     private static final Logger logger = LoggerFactory.getLogger(SharedBillTransactionFieldMapper.class);
 
-    /** MM-dd-yyyy, e.g. 04-12-2023 (single-digit month/day also accepted). */
-    private static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter.ofPattern("M-d-yyyy");
+    /** MM/dd/yyyy, e.g. 04/12/2023 (single-digit month/day also accepted). */
+    private static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter.ofPattern("M/d/yyyy");
 
     private final PersonRepository personRepository;
     private final CategoryRepository categoryRepository;
