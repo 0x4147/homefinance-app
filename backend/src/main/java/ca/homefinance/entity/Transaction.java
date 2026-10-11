@@ -22,6 +22,7 @@ public class Transaction {
     @Column(name = "transaction_id")
     private Integer transactionId;
 
+    /** Signed cash flow: negative = money out, positive = money in (a refund is money in). */
     @Column(name = "amount", nullable = false)
     private BigDecimal amount;
 
@@ -34,13 +35,9 @@ public class Transaction {
     @Column(name = "details", columnDefinition = "TEXT")
     private String details;
 
-    @Enumerated(EnumType.STRING)
-    @Column(name = "account", nullable = false)
-    private AccountType account;
-
-    @Enumerated(EnumType.STRING)
-    @Column(name = "transaction_type", nullable = false)
-    private TransactionType transactionType;
+    @ManyToOne(optional = false)
+    @JoinColumn(name = "account_id", referencedColumnName = "account_id")
+    private Account account;
 
     @ManyToOne
     @JoinColumn(name = "category_id", referencedColumnName = "category_id")
@@ -50,6 +47,7 @@ public class Transaction {
     @JoinColumn(name = "uncategorized_transaction_id", referencedColumnName = "id")
     private UncategorizedTransaction uncategorizedTransaction;
 
+    /** Cardholder / who made the purchase; who actually pays is {@link Account#getPayer()}. */
     @ManyToOne
     @JoinColumn(name = "person_id", referencedColumnName = "person_id")
     private Person person;
@@ -58,12 +56,31 @@ public class Transaction {
     @Column(name = "shared", nullable = false)
     private boolean shared = true;
 
-    public enum AccountType {
-        CIBC, AMEX, ASANKA, DIVYA
-    }
-
+    /** Display label derived from the category's kind and the sign of the amount; never stored. */
     public enum TransactionType {
-        INCOME, EXPENSE, CARDPAYMENT, REFUND, BILL, RENTALBILLINCOME, RENTALRENTINCOME
+        EXPENSE, REFUND, INCOME, TRANSFER
     }
 
+    public TransactionType getType() {
+        Category.CategoryKind kind = category == null ? null : category.getKind();
+        if (kind == Category.CategoryKind.TRANSFER) {
+            return TransactionType.TRANSFER;
+        }
+        boolean moneyIn = amount != null && amount.signum() > 0;
+        if (kind == Category.CategoryKind.INCOME) {
+            return moneyIn ? TransactionType.INCOME : TransactionType.EXPENSE;
+        }
+        // EXPENSE category, or not categorized yet (treated as spending, money in as a refund)
+        return moneyIn ? TransactionType.REFUND : TransactionType.EXPENSE;
+    }
+
+    /** Takes part in the shared-expense balance: shared, and categorized in a category that counts. */
+    public boolean countsInBalance() {
+        return shared && category != null && category.isInBalance();
+    }
+
+    /** What this transaction adds to its payer's "paid" figure: spending is positive, income/refunds negative. */
+    public BigDecimal balanceContribution() {
+        return countsInBalance() ? amount.negate() : BigDecimal.ZERO;
+    }
 }

@@ -7,13 +7,27 @@ CREATE TABLE person (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Table to store categories (for income and expenses)
+-- Table to store categories. A category decides how its transactions behave: what kind of money it is and
+-- whether it takes part in the shared-expense balance.
 CREATE TABLE category (
-                          category_id INT AUTO_INCREMENT PRIMARY KEY,
-                          name VARCHAR(255) NOT NULL,
-                          type ENUM('INCOME', 'EXPENSE') NOT NULL, -- Categorizes whether it's for income or expense
-                          description TEXT,
-                          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    category_id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(255) NOT NULL UNIQUE,
+    kind ENUM('EXPENSE', 'INCOME', 'TRANSFER') NOT NULL,
+    in_balance BOOLEAN NOT NULL, -- Counts toward the monthly shared-expense balance (when the transaction is also shared)
+    description TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT chk_category_transfer CHECK (kind <> 'TRANSFER' OR in_balance = FALSE)
+);
+
+-- Accounts transactions are imported from. payer_person_id is who ultimately funds the account
+-- (CIBC and AMEX are settled by one person; a personal account is funded by its owner).
+CREATE TABLE account (
+    account_id INT AUTO_INCREMENT PRIMARY KEY,
+    code VARCHAR(20) NOT NULL UNIQUE, -- CIBC, AMEX, ASANKA, DIVYA
+    name VARCHAR(255) NOT NULL,
+    kind ENUM('BANK', 'CREDIT_CARD') NOT NULL,
+    payer_person_id INT NOT NULL,
+    FOREIGN KEY (payer_person_id) REFERENCES person(person_id)
 );
 
 CREATE TABLE uncategorized_transaction (
@@ -32,16 +46,16 @@ CREATE TABLE uncategorized_transaction (
 
 CREATE TABLE transaction (
     transaction_id INT AUTO_INCREMENT PRIMARY KEY,
-    amount DECIMAL(10, 2) NOT NULL,
+    amount DECIMAL(10, 2) NOT NULL, -- Signed cash flow: negative = money out, positive = money in
     date DATE NOT NULL,
     entity VARCHAR(255) NOT NULL, -- Payer (for income) or Payee (for expenses)
     details TEXT,
     category_id INT,
     uncategorized_transaction_id INT,
-    account VARCHAR(50) NOT NULL,
-    transaction_type VARCHAR(50) NOT NULL, -- Defines type
-    person_id INT, -- Relationship with the person involved
+    account_id INT NOT NULL,
+    person_id INT, -- Cardholder / who made the purchase
     shared BOOLEAN NOT NULL DEFAULT TRUE, -- Takes part in the shared-expense balance; FALSE for one person's own spending
+    FOREIGN KEY (account_id) REFERENCES account(account_id),
     FOREIGN KEY (category_id) REFERENCES category(category_id) ON DELETE SET NULL,
     FOREIGN KEY (person_id) REFERENCES person(person_id) ON DELETE SET NULL,
     FOREIGN KEY (uncategorized_transaction_id) REFERENCES uncategorized_transaction(id) ON DELETE SET NULL
@@ -97,6 +111,7 @@ CREATE TABLE merchant_rule (
 );
 
 
+CREATE INDEX idx_transaction_account_id ON transaction(account_id);
 CREATE INDEX idx_transaction_category_id ON transaction(category_id);
 CREATE INDEX idx_transaction_person_id ON transaction(person_id);
 CREATE INDEX idx_transaction_uncat_id ON transaction(uncategorized_transaction_id);

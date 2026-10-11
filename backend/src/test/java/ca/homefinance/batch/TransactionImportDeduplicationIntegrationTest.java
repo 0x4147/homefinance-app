@@ -1,7 +1,11 @@
 package ca.homefinance.batch;
 
+import ca.homefinance.entity.Account;
 import ca.homefinance.entity.Category;
+import ca.homefinance.entity.Person;
+import ca.homefinance.repository.AccountRepository;
 import ca.homefinance.repository.CategoryRepository;
+import ca.homefinance.repository.PersonRepository;
 import ca.homefinance.repository.TransactionRepository;
 import ca.homefinance.service.TransactionCategorizationService;
 import org.junit.jupiter.api.BeforeEach;
@@ -51,6 +55,12 @@ class TransactionImportDeduplicationIntegrationTest {
     @Autowired
     private CategoryRepository categoryRepository;
 
+    @Autowired
+    private AccountRepository accountRepository;
+
+    @Autowired
+    private PersonRepository personRepository;
+
     @MockBean
     private TransactionCategorizationService categorizationService;
 
@@ -61,10 +71,24 @@ class TransactionImportDeduplicationIntegrationTest {
     void setUp() {
         transactionRepository.deleteAll();
         categoryRepository.deleteAll();
+        accountRepository.deleteAll();
+        personRepository.deleteAll();
+
+        Person divya = new Person();
+        divya.setCode("DIVYA");
+        divya.setName("Divya");
+        divya = personRepository.save(divya);
+        Account cibc = new Account();
+        cibc.setCode("CIBC");
+        cibc.setName("CIBC");
+        cibc.setKind(Account.AccountKind.BANK);
+        cibc.setPayer(divya);
+        accountRepository.save(cibc);
 
         Category category = new Category();
         category.setName("Test Category");
-        category.setType(Category.CategoryType.EXPENSE);
+        category.setKind(Category.CategoryKind.EXPENSE);
+        category.setInBalance(true);
         category = categoryRepository.save(category);
         when(categorizationService.categorizeTransaction(any(), any(), any(), any())).thenReturn(category);
     }

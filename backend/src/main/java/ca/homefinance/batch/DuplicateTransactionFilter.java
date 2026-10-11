@@ -41,7 +41,7 @@ public class DuplicateTransactionFilter implements ItemProcessor<Transaction, Tr
         Key key = Key.of(transaction);
         int occurrence = seenInFile.merge(key, 1, Integer::sum);
         // Looked up on first sight of the key, i.e. before any row with this key is written by this import.
-        long existing = existingBeforeImport.computeIfAbsent(key, k -> repository.countByAccountAndDateAndEntityAndAmount(
+        long existing = existingBeforeImport.computeIfAbsent(key, k -> repository.countByAccount_CodeAndDateAndEntityAndAmount(
                 k.account(), k.date(), k.entity(), k.amount()));
 
         if (occurrence <= existing) {
@@ -52,9 +52,9 @@ public class DuplicateTransactionFilter implements ItemProcessor<Transaction, Tr
         return transaction;
     }
 
-    private record Key(Transaction.AccountType account, LocalDate date, String entity, BigDecimal amount) {
+    private record Key(String account, LocalDate date, String entity, BigDecimal amount) {
         static Key of(Transaction t) {
-            return new Key(t.getAccount(), t.getDate(),
+            return new Key(t.getAccount().getCode(), t.getDate(),
                     t.getEntity() == null ? "" : t.getEntity().trim(),
                     t.getAmount().setScale(2, RoundingMode.HALF_UP));
         }

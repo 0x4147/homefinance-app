@@ -1,8 +1,10 @@
 package ca.homefinance.integration;
 
+import ca.homefinance.entity.Account;
 import ca.homefinance.entity.Category;
 import ca.homefinance.entity.Person;
 import ca.homefinance.entity.Transaction;
+import ca.homefinance.repository.AccountRepository;
 import ca.homefinance.repository.CategoryRepository;
 import ca.homefinance.repository.PersonRepository;
 import ca.homefinance.repository.TransactionRepository;
@@ -44,12 +46,19 @@ class MonthlyBalanceIntegrationTest {
     @Autowired
     private CategoryRepository categoryRepository;
 
+    @Autowired
+    private AccountRepository accountRepository;
+
 
     private MockMvc mockMvc;
 
     private Person asanka;
     private Person divya;
     private Category testCategory;
+    private Category rentalBillIncome;
+    private Category rentalRentIncome;
+    private Category cardPayment;
+    private final java.util.Map<String, Account> accounts = new java.util.HashMap<>();
 
     @BeforeEach
     void setUp() {
@@ -57,6 +66,7 @@ class MonthlyBalanceIntegrationTest {
         
         // Clean up existing data
         transactionRepository.deleteAll();
+        accountRepository.deleteAll();
         personRepository.deleteAll();
         categoryRepository.deleteAll();
 
@@ -73,11 +83,17 @@ class MonthlyBalanceIntegrationTest {
         divya.setEmail("divya@test.com");
         divya = personRepository.save(divya);
 
-        // Create test category
-        testCategory = new Category();
-        testCategory.setName("Test Category");
-        testCategory.setType(Category.CategoryType.EXPENSE);
-        testCategory = categoryRepository.save(testCategory);
+        // Create test categories: what a category says decides how its transactions count
+        testCategory = category("Test Category", Category.CategoryKind.EXPENSE, true);
+        rentalBillIncome = category("Rental Bill Income", Category.CategoryKind.INCOME, true);
+        rentalRentIncome = category("Rental Rent Income", Category.CategoryKind.INCOME, true);
+        cardPayment = category("Card payment", Category.CategoryKind.TRANSFER, false);
+
+        // CIBC and AMEX are settled by Divya, whichever card was used
+        account("ASANKA", Account.AccountKind.BANK, asanka);
+        account("DIVYA", Account.AccountKind.BANK, divya);
+        account("CIBC", Account.AccountKind.BANK, divya);
+        account("AMEX", Account.AccountKind.CREDIT_CARD, divya);
     }
 
     @Test
@@ -88,46 +104,46 @@ class MonthlyBalanceIntegrationTest {
         // Asanka's transactions
         Transaction asankaExpense1 = createTransaction(new BigDecimal("120.50"), 
                 january2024, "Grocery Store", "Weekly groceries", 
-                Transaction.AccountType.ASANKA, Transaction.TransactionType.EXPENSE, asanka);
+                "ASANKA", Kind.EXPENSE, asanka);
         
         Transaction asankaExpense2 = createTransaction(new BigDecimal("45.00"), 
                 january2024.plusDays(5), "Gas Station", "Fuel", 
-                Transaction.AccountType.ASANKA, Transaction.TransactionType.EXPENSE, asanka);
+                "ASANKA", Kind.EXPENSE, asanka);
         
         // CIBC/AMEX hold shared purchases only (both cards); Divya settles both in full each month,
         // so every card purchase counts toward her contribution regardless of whose card made it.
         Transaction asankaCardPurchase = createTransaction(new BigDecimal("200.00"),
                 january2024.plusDays(10), "Costco", "Shared purchase on Asanka's CIBC card",
-                Transaction.AccountType.CIBC, Transaction.TransactionType.EXPENSE, asanka);
+                "CIBC", Kind.EXPENSE, asanka);
 
         Transaction asankaBill = createTransaction(new BigDecimal("85.30"), 
                 january2024.plusDays(15), "Electric Company", "Electric bill", 
-                Transaction.AccountType.ASANKA, Transaction.TransactionType.BILL, asanka);
+                "ASANKA", Kind.BILL, asanka);
         
         Transaction asankaRentalIncome = createTransaction(new BigDecimal("50.00"), 
                 january2024.plusDays(11), "Tenant", "Rental bill income",
-                Transaction.AccountType.ASANKA, Transaction.TransactionType.RENTALBILLINCOME, asanka);
+                "ASANKA", Kind.RENTALBILLINCOME, asanka);
 
         // Divya's transactions
         Transaction divyaExpense1 = createTransaction(new BigDecimal("95.75"), 
                 january2024.plusDays(2), "Restaurant", "Dinner out", 
-                Transaction.AccountType.DIVYA, Transaction.TransactionType.EXPENSE, divya);
+                "DIVYA", Kind.EXPENSE, divya);
         
         Transaction divyaExpense2 = createTransaction(new BigDecimal("30.00"), 
                 january2024.plusDays(8), "Coffee Shop", "Coffee", 
-                Transaction.AccountType.DIVYA, Transaction.TransactionType.EXPENSE, divya);
+                "DIVYA", Kind.EXPENSE, divya);
         
         Transaction divyaCardPurchase = createTransaction(new BigDecimal("150.00"),
                 january2024.plusDays(12), "Amazon.ca", "Shared purchase on Divya's AMEX card",
-                Transaction.AccountType.AMEX, Transaction.TransactionType.EXPENSE, divya);
+                "AMEX", Kind.EXPENSE, divya);
 
         Transaction divyaBill = createTransaction(new BigDecimal("60.25"), 
                 january2024.plusDays(18), "Internet Provider", "Internet bill", 
-                Transaction.AccountType.DIVYA, Transaction.TransactionType.BILL, divya);
+                "DIVYA", Kind.BILL, divya);
         
         Transaction divyaRentalIncome = createTransaction(new BigDecimal("75.00"), 
                 january2024.plusDays(11), "Tenant", "Rental rent income",
-                Transaction.AccountType.DIVYA, Transaction.TransactionType.RENTALRENTINCOME, divya);
+                "DIVYA", Kind.RENTALRENTINCOME, divya);
 
         // Save all transactions
         transactionRepository.saveAll(java.util.Arrays.asList(
@@ -180,7 +196,7 @@ class MonthlyBalanceIntegrationTest {
 
         Transaction asankaExpense = createTransaction(new BigDecimal("200.00"), 
                 january2024, "Store", "Expense", 
-                Transaction.AccountType.ASANKA, Transaction.TransactionType.EXPENSE, asanka);
+                "ASANKA", Kind.EXPENSE, asanka);
 
         transactionRepository.save(asankaExpense);
 
@@ -208,7 +224,7 @@ class MonthlyBalanceIntegrationTest {
 
         Transaction divyaExpense = createTransaction(new BigDecimal("300.00"), 
                 january2024, "Store", "Expense", 
-                Transaction.AccountType.DIVYA, Transaction.TransactionType.EXPENSE, divya);
+                "DIVYA", Kind.EXPENSE, divya);
 
         transactionRepository.save(divyaExpense);
 
@@ -236,11 +252,11 @@ class MonthlyBalanceIntegrationTest {
 
         Transaction asankaExpense = createTransaction(new BigDecimal("100.00"), 
                 january2024, "Store A", "Expense", 
-                Transaction.AccountType.ASANKA, Transaction.TransactionType.EXPENSE, asanka);
+                "ASANKA", Kind.EXPENSE, asanka);
 
         Transaction divyaExpense = createTransaction(new BigDecimal("100.00"), 
                 january2024, "Store B", "Expense", 
-                Transaction.AccountType.DIVYA, Transaction.TransactionType.EXPENSE, divya);
+                "DIVYA", Kind.EXPENSE, divya);
 
         transactionRepository.saveAll(java.util.Arrays.asList(asankaExpense, divyaExpense));
 
@@ -270,15 +286,15 @@ class MonthlyBalanceIntegrationTest {
 
         Transaction decemberTransaction = createTransaction(new BigDecimal("100.00"), 
                 december2023, "Store", "December expense", 
-                Transaction.AccountType.ASANKA, Transaction.TransactionType.EXPENSE, asanka);
+                "ASANKA", Kind.EXPENSE, asanka);
 
         Transaction januaryTransaction = createTransaction(new BigDecimal("50.00"), 
                 january2024, "Store", "January expense", 
-                Transaction.AccountType.ASANKA, Transaction.TransactionType.EXPENSE, asanka);
+                "ASANKA", Kind.EXPENSE, asanka);
 
         Transaction februaryTransaction = createTransaction(new BigDecimal("75.00"), 
                 february2024, "Store", "February expense", 
-                Transaction.AccountType.ASANKA, Transaction.TransactionType.EXPENSE, asanka);
+                "ASANKA", Kind.EXPENSE, asanka);
 
         transactionRepository.saveAll(java.util.Arrays.asList(decemberTransaction, januaryTransaction, februaryTransaction));
 
@@ -303,24 +319,24 @@ class MonthlyBalanceIntegrationTest {
         // Asanka: $200 expenses, $100 rental income = $100 net
         Transaction asankaExpense = createTransaction(new BigDecimal("200.00"), 
                 january2024, "Store", "Expense", 
-                Transaction.AccountType.ASANKA, Transaction.TransactionType.EXPENSE, asanka);
+                "ASANKA", Kind.EXPENSE, asanka);
         
         Transaction asankaRentalBillIncome = createTransaction(new BigDecimal("50.00"), 
                 january2024.plusDays(5), "Tenant", "Rental bill income", 
-                Transaction.AccountType.ASANKA, Transaction.TransactionType.RENTALBILLINCOME, asanka);
+                "ASANKA", Kind.RENTALBILLINCOME, asanka);
         
         Transaction asankaRentalRentIncome = createTransaction(new BigDecimal("50.00"), 
                 january2024.plusDays(10), "Tenant", "Rental rent income", 
-                Transaction.AccountType.ASANKA, Transaction.TransactionType.RENTALRENTINCOME, asanka);
+                "ASANKA", Kind.RENTALRENTINCOME, asanka);
 
         // Divya: $150 expenses, $25 rental income = $125 net
         Transaction divyaExpense = createTransaction(new BigDecimal("150.00"), 
                 january2024, "Store", "Expense", 
-                Transaction.AccountType.DIVYA, Transaction.TransactionType.EXPENSE, divya);
+                "DIVYA", Kind.EXPENSE, divya);
         
         Transaction divyaRentalIncome = createTransaction(new BigDecimal("25.00"), 
                 january2024.plusDays(8), "Tenant", "Rental bill income", 
-                Transaction.AccountType.DIVYA, Transaction.TransactionType.RENTALBILLINCOME, divya);
+                "DIVYA", Kind.RENTALBILLINCOME, divya);
 
         transactionRepository.saveAll(java.util.Arrays.asList(
                 asankaExpense, asankaRentalBillIncome, asankaRentalRentIncome,
@@ -357,11 +373,11 @@ class MonthlyBalanceIntegrationTest {
     void getMonthlyBalance_CardPaymentWithoutPerson_ShouldNotFail() throws Exception {
         Transaction asankaExpense = createTransaction(new BigDecimal("100.00"),
                 LocalDate.of(2024, 1, 15), "Store", "Expense",
-                Transaction.AccountType.ASANKA, Transaction.TransactionType.EXPENSE, asanka);
+                "ASANKA", Kind.EXPENSE, asanka);
 
         Transaction orphanCardPayment = createTransaction(new BigDecimal("-250.00"),
                 LocalDate.of(2024, 1, 20), "Card Payment", "Unrecognised card number",
-                Transaction.AccountType.CIBC, Transaction.TransactionType.CARDPAYMENT, null);
+                "CIBC", Kind.CARDPAYMENT, null);
 
         transactionRepository.saveAll(Arrays.asList(asankaExpense, orphanCardPayment));
 
@@ -374,18 +390,82 @@ class MonthlyBalanceIntegrationTest {
                 .andExpect(jsonPath("$.whoOwes").value("Divya"));
     }
 
+    @Test
+    void getMonthlyBalance_PersonalUncategorizedAndTransfers_AreNotCounted() throws Exception {
+        LocalDate day = LocalDate.of(2024, 1, 15);
+
+        Transaction shared = createTransaction(new BigDecimal("100.00"), day, "Store", "Shared",
+                "ASANKA", Kind.EXPENSE, asanka);
+        Transaction personal = createTransaction(new BigDecimal("500.00"), day, "Gym gear", "Personal",
+                "ASANKA", Kind.EXPENSE, asanka);
+        personal.setShared(false);
+        Transaction uncategorized = createTransaction(new BigDecimal("70.00"), day, "Mystery", "Awaiting review",
+                "ASANKA", Kind.EXPENSE, asanka);
+        uncategorized.setCategory(null);
+        Transaction payment = createTransaction(new BigDecimal("5861.69"), day, "PAYMENT RECEIVED - THANK YOU", "Bill payment",
+                "AMEX", Kind.CARDPAYMENT, divya);
+
+        transactionRepository.saveAll(Arrays.asList(shared, personal, uncategorized, payment));
+
+        // Only the $100 shared, categorized purchase counts.
+        mockMvc.perform(get("/api/v1/transaction/getMonthlyBalance")
+                        .param("month", "1")
+                        .param("year", "2024"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.asankaPaid").value("100.0"))
+                .andExpect(jsonPath("$.divyaPaid").value("0"))
+                .andExpect(jsonPath("$.balanceAmount").value("50.0"))
+                .andExpect(jsonPath("$.whoOwes").value("Divya"));
+    }
+
+    /** How a scenario row behaves; each maps to a seeded-style category (the category decides, not a stored type). */
+    private enum Kind { EXPENSE, BILL, RENTALBILLINCOME, RENTALRENTINCOME, CARDPAYMENT }
+
+    /** @param amount the amount as the scenario describes it (a magnitude); the sign is derived from the kind */
     private Transaction createTransaction(BigDecimal amount, LocalDate date, String entity,
-                                        String details, Transaction.AccountType account, 
-                                        Transaction.TransactionType transactionType, Person person) {
+                                        String details, String accountCode,
+                                        Kind kind, Person person) {
         Transaction transaction = new Transaction();
-        transaction.setAmount(amount);
         transaction.setDate(date);
         transaction.setEntity(entity);
         transaction.setDetails(details);
-        transaction.setAccount(account);
-        transaction.setTransactionType(transactionType);
+        transaction.setAccount(accounts.get(accountCode));
         transaction.setPerson(person);
-        transaction.setCategory(testCategory);
+        switch (kind) {
+            case EXPENSE, BILL -> {
+                transaction.setAmount(amount.abs().negate());
+                transaction.setCategory(testCategory);
+            }
+            case RENTALBILLINCOME -> {
+                transaction.setAmount(amount.abs());
+                transaction.setCategory(rentalBillIncome);
+            }
+            case RENTALRENTINCOME -> {
+                transaction.setAmount(amount.abs());
+                transaction.setCategory(rentalRentIncome);
+            }
+            case CARDPAYMENT -> {
+                transaction.setAmount(amount.abs());
+                transaction.setCategory(cardPayment);
+            }
+        }
         return transaction;
+    }
+
+    private Category category(String name, Category.CategoryKind kind, boolean inBalance) {
+        Category category = new Category();
+        category.setName(name);
+        category.setKind(kind);
+        category.setInBalance(inBalance);
+        return categoryRepository.save(category);
+    }
+
+    private void account(String code, Account.AccountKind kind, Person payer) {
+        Account account = new Account();
+        account.setCode(code);
+        account.setName(code);
+        account.setKind(kind);
+        account.setPayer(payer);
+        accounts.put(code, accountRepository.save(account));
     }
 }

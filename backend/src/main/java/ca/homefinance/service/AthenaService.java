@@ -83,8 +83,8 @@ public class AthenaService {
             String line = String.join(",",
                     safe(t.getDate() != null ? t.getDate().toString() : ""),
                     safe(formatAmount(t.getAmount())),
-                    safe(t.getAccount() != null ? t.getAccount().name() : ""),
-                    safe(t.getTransactionType() != null ? t.getTransactionType().name() : ""),
+                    safe(t.getAccount() != null ? t.getAccount().getCode() : ""),
+                    safe(t.getType().name()),
                     safe(category),
                     safe(nullToEmpty(t.getEntity())),
                     safe(nullToEmpty(t.getDetails()))

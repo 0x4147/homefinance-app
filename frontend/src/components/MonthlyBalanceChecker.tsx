@@ -18,10 +18,8 @@ const MONTH_NAMES = [
 
 const KIND_LABELS: Record<string, string> = {
     EXPENSE: 'Expense',
-    BILL: 'Bill',
-    RENTAL_BILL_INCOME: 'Rental bill income',
-    RENTAL_RENT_INCOME: 'Rental income',
-    CARD_SPENDING: 'Shared card',
+    REFUND: 'Refund',
+    INCOME: 'Income',
 };
 
 const currencyFormatter = new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD' });
@@ -138,8 +136,7 @@ const TransactionsDrawer = ({ month, year, person, total, onClose }: {
                                     <div className="min-w-0">
                                         <p className="truncate font-medium text-gray-900">{line.transaction.entity}</p>
                                         <p className="text-xs text-gray-500">
-                                            {line.transaction.date} · {KIND_LABELS[line.kind] ?? line.kind}
-                                            {line.kind === 'CARD_SPENDING' ? ` · ${line.transaction.account}` : ''}
+                                            {line.transaction.date} · {KIND_LABELS[line.kind] ?? line.kind} · {line.transaction.category} · {line.transaction.account}
                                         </p>
                                     </div>
                                     <span className={`whitespace-nowrap font-medium tabular-nums ${line.contribution < 0 ? 'text-emerald-700' : 'text-gray-900'}`}>

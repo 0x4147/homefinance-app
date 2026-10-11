@@ -111,10 +111,8 @@ public class BatchConfig {
             // No header row; details and category are optional trailing columns
             tokenizer.setStrict(false);
             tokenizer.setNames("date", "entity", "amount", "details", "category");
-            Transaction.AccountType account = "asanka-shared".equalsIgnoreCase(sourceType)
-                    ? Transaction.AccountType.ASANKA
-                    : Transaction.AccountType.DIVYA;
-            lineMapper.setFieldSetMapper(sharedBillTransactionFieldMapper.forAccount(account));
+            String accountCode = "asanka-shared".equalsIgnoreCase(sourceType) ? "ASANKA" : "DIVYA";
+            lineMapper.setFieldSetMapper(sharedBillTransactionFieldMapper.forAccount(accountCode));
         } else {
             logger.error("Unknown source type: {}", sourceType);
             throw new IllegalArgumentException("Unknown source type: " + sourceType);

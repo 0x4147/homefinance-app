@@ -5,32 +5,44 @@ VALUES
     ('DIVYA', 'Divya', 'divyamehta.nz@gmail.com');
 
 -- Category
-INSERT INTO category (name, type)
+-- kind: what the money is. in_balance: takes part in the shared-expense balance (a transaction counts
+-- only if it is also marked shared). Card payment is a transfer: the card purchases are what count.
+INSERT INTO category (name, kind, in_balance)
 VALUES
-    ('Utility Bill', 'EXPENSE'),
-    ('Groceries', 'EXPENSE'),
-    ('Transportation', 'EXPENSE'),
-    ('Healthcare', 'EXPENSE'),
-    ('Entertainment', 'EXPENSE'),
-    ('Mortgage', 'EXPENSE'),
-    ('Property tax', 'EXPENSE'),
-    ('Insurance', 'EXPENSE'),
-    ('Car repair', 'EXPENSE'),
-    ('Home maintenance', 'EXPENSE'),
-    ('Salary', 'INCOME'),
-    ('Rental Income', 'INCOME'),
-    ('Government Grants', 'INCOME'),
-    ('Take Out', 'EXPENSE'),
-    ('Amazon', 'EXPENSE'),
-    ('Temu', 'EXPENSE'),
-    ('Card payment', 'INCOME'),
-    ('Car loan', 'EXPENSE'),
-    ('Alcohol', 'EXPENSE'),
-    ('Clothing', 'EXPENSE'),
-    ('Shopping', 'EXPENSE'),
-    ('Travel', 'EXPENSE'),
-    ('Bank Fees', 'EXPENSE'),
-    ('Child Care', 'EXPENSE');
+    ('Utility Bill', 'EXPENSE', TRUE),
+    ('Groceries', 'EXPENSE', TRUE),
+    ('Transportation', 'EXPENSE', TRUE),
+    ('Healthcare', 'EXPENSE', TRUE),
+    ('Entertainment', 'EXPENSE', TRUE),
+    ('Mortgage', 'EXPENSE', TRUE),
+    ('Property tax', 'EXPENSE', TRUE),
+    ('Insurance', 'EXPENSE', TRUE),
+    ('Car repair', 'EXPENSE', TRUE),
+    ('Home maintenance', 'EXPENSE', TRUE),
+    ('Take Out', 'EXPENSE', TRUE),
+    ('Amazon', 'EXPENSE', TRUE),
+    ('Temu', 'EXPENSE', TRUE),
+    ('Car loan', 'EXPENSE', TRUE),
+    ('Alcohol', 'EXPENSE', TRUE),
+    ('Clothing', 'EXPENSE', TRUE),
+    ('Shopping', 'EXPENSE', TRUE),
+    ('Travel', 'EXPENSE', TRUE),
+    ('Bank Fees', 'EXPENSE', TRUE),
+    ('Child Care', 'EXPENSE', TRUE),
+    ('Salary', 'INCOME', FALSE),
+    ('Government Grants', 'INCOME', FALSE),
+    ('Rental Rent Income', 'INCOME', TRUE),
+    ('Rental Bill Income', 'INCOME', TRUE),
+    ('Card payment', 'TRANSFER', FALSE);
+
+-- Account
+-- CIBC and AMEX hold shared purchases only and are settled by Divya, whichever card was used.
+INSERT INTO account (code, name, kind, payer_person_id)
+VALUES
+    ('CIBC', 'CIBC', 'BANK', (SELECT person_id FROM person WHERE code = 'DIVYA')),
+    ('AMEX', 'AMEX', 'CREDIT_CARD', (SELECT person_id FROM person WHERE code = 'DIVYA')),
+    ('ASANKA', 'Asanka personal account', 'BANK', (SELECT person_id FROM person WHERE code = 'ASANKA')),
+    ('DIVYA', 'Divya personal account', 'BANK', (SELECT person_id FROM person WHERE code = 'DIVYA'));
 
 
 -- PersonCard
@@ -198,7 +210,7 @@ VALUES
     ('the beer store', (SELECT category_id FROM category WHERE name = 'Alcohol'), 'SEED'),
     ('payment', (SELECT category_id FROM category WHERE name = 'Card payment'), 'SEED'),
     ('thank you', (SELECT category_id FROM category WHERE name = 'Card payment'), 'SEED'),
-    ('wfcuconditional', (SELECT category_id FROM category WHERE name = 'Card loan'), 'SEED'),
+    ('wfcuconditional', (SELECT category_id FROM category WHERE name = 'Car loan'), 'SEED'),
     ('alectra', (SELECT category_id FROM category WHERE name = 'Utility Bill'), 'SEED'),
     ('enbridge', (SELECT category_id FROM category WHERE name = 'Utility Bill'), 'SEED'),
     ('bell canada', (SELECT category_id FROM category WHERE name = 'Utility Bill'), 'SEED'),

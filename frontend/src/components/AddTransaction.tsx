@@ -1,9 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { apiService } from '../services/api';
-import type { Person } from '../services/api';
+import type { Category, Person } from '../services/api';
 
 const ACCOUNTS = ['CIBC', 'AMEX', 'ASANKA', 'DIVYA'];
-const TRANSACTION_TYPES = ['EXPENSE', 'INCOME', 'CARDPAYMENT', 'REFUND', 'BILL', 'RENTALBILLINCOME', 'RENTALRENTINCOME'];
+// Which way the money moved; the category decides how the balance and reports treat it.
+const TRANSACTION_TYPES = ['EXPENSE', 'REFUND', 'INCOME', 'TRANSFER'];
+const AUTO_CATEGORY = '';
 
 const today = () => new Date().toLocaleDateString('en-CA');
 
@@ -20,6 +22,8 @@ const AddTransaction: React.FC = () => {
     const [account, setAccount] = useState(ACCOUNTS[0]);
     const [transactionType, setTransactionType] = useState(TRANSACTION_TYPES[0]);
     const [personId, setPersonId] = useState('');
+    const [categories, setCategories] = useState<Category[]>([]);
+    const [category, setCategory] = useState(AUTO_CATEGORY);
 
     const [isSaving, setIsSaving] = useState(false);
     const [message, setMessage] = useState<{ kind: 'success' | 'error'; text: string } | null>(null);
@@ -31,6 +35,9 @@ const AddTransaction: React.FC = () => {
                 console.error('Failed to load card holders', error);
                 setLoadError('Could not load card holders. Refresh the page to try again.');
             });
+        apiService.getAllCategories()
+            .then(setCategories)
+            .catch((error) => console.error('Failed to load categories', error));
     }, []);
 
     const parsedAmount = Number(amount);
@@ -54,6 +61,7 @@ const AddTransaction: React.FC = () => {
             details: details.trim() || undefined,
             account,
             transactionType,
+            category: category || undefined,
             person: personId,
         };
         try {
@@ -162,9 +170,20 @@ const AddTransaction: React.FC = () => {
                     </div>
                 </div>
 
+                <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Category</label>
+                    <select value={category} onChange={(e) => setCategory(e.target.value)} className={inputClass}>
+                        <option value={AUTO_CATEGORY}>Automatic (from merchant rules)</option>
+                        {categories.map((option) => (
+                            <option key={option.categoryId} value={option.name}>{option.name}</option>
+                        ))}
+                    </select>
+                </div>
+
                 <p className="text-sm text-gray-500">
-                    The category is assigned automatically from your merchant rules. Unmatched merchants go to the review queue.
-                    Refunds and card payments are saved as negative amounts automatically. Enter the amount as a positive number.
+                    Leave the category on Automatic to use your merchant rules; unmatched merchants go to the review queue.
+                    Pick one to set it yourself (e.g. Rental Bill Income). Enter the amount as a positive number: an expense
+                    is saved as money out, and a refund, income or transfer as money in.
                 </p>
 
                 {message && (

@@ -16,16 +16,11 @@ public interface TransactionRepository extends JpaRepository<Transaction, Intege
 
     List<Transaction> findByUncategorizedTransaction_Id(Integer id);
 
-    long countByAccountAndDateAndEntityAndAmount(Transaction.AccountType account, LocalDate date, String entity, BigDecimal amount);
+    long countByAccount_CodeAndDateAndEntityAndAmount(String accountCode, LocalDate date, String entity, BigDecimal amount);
 
-    @Query("SELECT t FROM Transaction t WHERE " +
-            "(:startDate IS NULL OR :endDate IS NULL OR t.date BETWEEN :startDate AND :endDate) AND " +
-            "(t.account IN :accounts) AND " +
-            "(t.transactionType IN :transactionTypes)")
-    List<Transaction> searchTransactionByDateRangeAccountTypeTransactionType(
-            @Param("startDate") LocalDate startDate,
-            @Param("endDate") LocalDate endDate,
-            @Param("accounts") List<Transaction.AccountType> accounts,
-            @Param("transactionTypes") List<Transaction.TransactionType> transactionTypes
-    );
+    /** The transactions that make up a date range's shared-expense balance: shared, in a category that counts. */
+    @Query("SELECT t FROM Transaction t JOIN FETCH t.account a JOIN FETCH a.payer JOIN FETCH t.category c " +
+            "WHERE t.date BETWEEN :startDate AND :endDate AND t.shared = true AND c.inBalance = true")
+    List<Transaction> findBalanceTransactions(@Param("startDate") LocalDate startDate,
+                                              @Param("endDate") LocalDate endDate);
 }

@@ -1,5 +1,6 @@
 package ca.homefinance.batch;
 
+import ca.homefinance.entity.Account;
 import ca.homefinance.entity.Transaction;
 import ca.homefinance.repository.TransactionRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -35,7 +36,7 @@ class DuplicateTransactionFilterTest {
 
     @Test
     void process_NothingExistingInDatabase_ShouldKeepTransaction() {
-        when(repository.countByAccountAndDateAndEntityAndAmount(any(), any(), any(), any())).thenReturn(0L);
+        when(repository.countByAccount_CodeAndDateAndEntityAndAmount(any(), any(), any(), any())).thenReturn(0L);
 
         Transaction tx = transaction("Store", "25.00");
 
@@ -44,8 +45,8 @@ class DuplicateTransactionFilterTest {
 
     @Test
     void process_AlreadyImported_ShouldSkipTransaction() {
-        when(repository.countByAccountAndDateAndEntityAndAmount(
-                eq(Transaction.AccountType.CIBC), eq(DATE), eq("Store"), eq(new BigDecimal("25.00"))))
+        when(repository.countByAccount_CodeAndDateAndEntityAndAmount(
+                eq("CIBC"), eq(DATE), eq("Store"), eq(new BigDecimal("25.00"))))
                 .thenReturn(1L);
 
         assertNull(filter.process(transaction("Store", "25.00")));
@@ -53,7 +54,7 @@ class DuplicateTransactionFilterTest {
 
     @Test
     void process_TwoIdenticalRowsInFileAndNoneExisting_ShouldKeepBoth() {
-        when(repository.countByAccountAndDateAndEntityAndAmount(any(), any(), any(), any())).thenReturn(0L);
+        when(repository.countByAccount_CodeAndDateAndEntityAndAmount(any(), any(), any(), any())).thenReturn(0L);
 
         assertNotNull(filter.process(transaction("Coffee Shop", "4.50")));
         assertNotNull(filter.process(transaction("Coffee Shop", "4.50")));
@@ -61,7 +62,7 @@ class DuplicateTransactionFilterTest {
 
     @Test
     void process_TwoIdenticalRowsInFileAndOneExisting_ShouldSkipOnlyFirst() {
-        when(repository.countByAccountAndDateAndEntityAndAmount(any(), any(), any(), any())).thenReturn(1L);
+        when(repository.countByAccount_CodeAndDateAndEntityAndAmount(any(), any(), any(), any())).thenReturn(1L);
 
         assertNull(filter.process(transaction("Coffee Shop", "4.50")));
         assertNotNull(filter.process(transaction("Coffee Shop", "4.50")));
@@ -69,7 +70,7 @@ class DuplicateTransactionFilterTest {
 
     @Test
     void process_TwoIdenticalRowsInFileAndTwoExisting_ShouldSkipBoth() {
-        when(repository.countByAccountAndDateAndEntityAndAmount(any(), any(), any(), any())).thenReturn(2L);
+        when(repository.countByAccount_CodeAndDateAndEntityAndAmount(any(), any(), any(), any())).thenReturn(2L);
 
         assertNull(filter.process(transaction("Coffee Shop", "4.50")));
         assertNull(filter.process(transaction("Coffee Shop", "4.50")));
@@ -77,8 +78,8 @@ class DuplicateTransactionFilterTest {
 
     @Test
     void process_AmountScaleAndEntityWhitespaceDiffer_ShouldStillMatch() {
-        when(repository.countByAccountAndDateAndEntityAndAmount(
-                eq(Transaction.AccountType.CIBC), eq(DATE), eq("Store"), eq(new BigDecimal("25.00"))))
+        when(repository.countByAccount_CodeAndDateAndEntityAndAmount(
+                eq("CIBC"), eq(DATE), eq("Store"), eq(new BigDecimal("25.00"))))
                 .thenReturn(1L);
 
         assertNull(filter.process(transaction("  Store ", "25")));
@@ -86,20 +87,20 @@ class DuplicateTransactionFilterTest {
 
     @Test
     void process_DatabaseCountIsLookedUpOncePerKey() {
-        when(repository.countByAccountAndDateAndEntityAndAmount(any(), any(), any(), any())).thenReturn(0L);
+        when(repository.countByAccount_CodeAndDateAndEntityAndAmount(any(), any(), any(), any())).thenReturn(0L);
 
         filter.process(transaction("Store", "25.00"));
         filter.process(transaction("Store", "25.00"));
         filter.process(transaction("Store", "25.00"));
 
-        verify(repository, times(1)).countByAccountAndDateAndEntityAndAmount(any(), any(), any(), any());
+        verify(repository, times(1)).countByAccount_CodeAndDateAndEntityAndAmount(any(), any(), any(), any());
     }
 
     @Test
     void process_DifferentAmountsOrDates_ShouldBeTreatedAsDistinct() {
-        when(repository.countByAccountAndDateAndEntityAndAmount(
+        when(repository.countByAccount_CodeAndDateAndEntityAndAmount(
                 any(), eq(DATE), eq("Store"), eq(new BigDecimal("25.00")))).thenReturn(1L);
-        when(repository.countByAccountAndDateAndEntityAndAmount(
+        when(repository.countByAccount_CodeAndDateAndEntityAndAmount(
                 any(), eq(DATE), eq("Store"), eq(new BigDecimal("26.00")))).thenReturn(0L);
 
         assertNull(filter.process(transaction("Store", "25.00")));
@@ -108,7 +109,9 @@ class DuplicateTransactionFilterTest {
 
     private Transaction transaction(String entity, String amount) {
         Transaction tx = new Transaction();
-        tx.setAccount(Transaction.AccountType.CIBC);
+        Account account = new Account();
+        account.setCode("CIBC");
+        tx.setAccount(account);
         tx.setDate(DATE);
         tx.setEntity(entity);
         tx.setAmount(new BigDecimal(amount));

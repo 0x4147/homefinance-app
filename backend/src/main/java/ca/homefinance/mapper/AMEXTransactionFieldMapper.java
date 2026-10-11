@@ -2,7 +2,7 @@ package ca.homefinance.mapper;
 
 import ca.homefinance.entity.Category;
 import ca.homefinance.entity.Transaction;
-import ca.homefinance.helper.GeneralHelper;
+import ca.homefinance.repository.AccountRepository;
 import ca.homefinance.repository.PersonRepository;
 import ca.homefinance.service.TransactionCategorizationService;
 import org.slf4j.Logger;
@@ -23,11 +23,14 @@ public class AMEXTransactionFieldMapper implements FieldSetMapper<Transaction> {
     private static final Logger logger = LoggerFactory.getLogger(AMEXTransactionFieldMapper.class);
     
     private final PersonRepository personRepository;
+    private final AccountRepository accountRepository;
     private final TransactionCategorizationService transactionCategorizationService;
 
     @Autowired
-    public AMEXTransactionFieldMapper(PersonRepository personRepository, TransactionCategorizationService transactionCategorizationService) {
+    public AMEXTransactionFieldMapper(PersonRepository personRepository, AccountRepository accountRepository,
+                                      TransactionCategorizationService transactionCategorizationService) {
         this.personRepository = personRepository;
+        this.accountRepository = accountRepository;
         this.transactionCategorizationService = transactionCategorizationService;
     }
 
@@ -70,15 +73,12 @@ public class AMEXTransactionFieldMapper implements FieldSetMapper<Transaction> {
                     .replace("$", "")
                     .replace(",", "")
                     .trim();
-            BigDecimal amount = new BigDecimal(cleanedAmount);
-            logger.debug("Cleaned and parsed amount: {}", amount);
+            // AMEX exports charges as positive and payments/refunds as negative; stored amounts are the reverse.
+            BigDecimal amount = new BigDecimal(cleanedAmount).negate();
+            logger.debug("Cleaned and parsed amount (sign flipped): {}", amount);
             transaction.setAmount(amount);
 
-            Transaction.TransactionType transactionType = GeneralHelper.determineTransactionType(transaction.getEntity(), amount);
-            logger.debug("Determined transaction type: {}", transactionType);
-            transaction.setTransactionType(transactionType);
-
-            transaction.setAccount(Transaction.AccountType.AMEX);
+            transaction.setAccount(accountRepository.findByCode("AMEX").orElseThrow());
             
             Category category = transactionCategorizationService.categorizeTransaction(transaction.getEntity(), null, transaction.getAmount(), transaction.getDate());
             if (category.getCategoryId() == null && category.getUncategorizedTransaction() != null){
@@ -93,16 +93,16 @@ public class AMEXTransactionFieldMapper implements FieldSetMapper<Transaction> {
             logger.debug("Person from field set: {}", person);
             if (person == null || person.isEmpty()){
                 logger.debug("Person is null or empty, setting to default");
-                transaction.setPerson(personRepository.findByCode(Transaction.AccountType.DIVYA.name()).orElseThrow());
+                transaction.setPerson(personRepository.findByCode("DIVYA").orElseThrow());
             }
             else {
                 if(person.contains("DIVYA")) {
                     logger.debug("Person contains 'DIVYA', setting to Divya");
-                    transaction.setPerson(personRepository.findByCode(Transaction.AccountType.DIVYA.name()).orElseThrow()); //Divya
+                    transaction.setPerson(personRepository.findByCode("DIVYA").orElseThrow()); //Divya
                 }
                 if(person.contains("ASANKA")) {
                     logger.debug("Person contains 'ASANKA', setting to Asanka");
-                    transaction.setPerson(personRepository.findByCode(Transaction.AccountType.ASANKA.name()).orElseThrow()); //Asanka
+                    transaction.setPerson(personRepository.findByCode("ASANKA").orElseThrow()); //Asanka
                 }
             }
 

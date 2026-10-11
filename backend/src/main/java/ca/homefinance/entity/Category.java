@@ -24,9 +24,14 @@ public class Category {
     @Column(name = "name", nullable = false)
     private String name;
 
+    /** What the money is: spending, income, or a transfer between the household's own accounts. */
     @Enumerated(EnumType.STRING)
-    @Column(name = "type", nullable = false)
-    private CategoryType type;
+    @Column(name = "kind", nullable = false)
+    private CategoryKind kind;
+
+    /** Transactions in this category count toward the shared-expense balance (if they are also shared). */
+    @Column(name = "in_balance", nullable = false)
+    private boolean inBalance;
 
     @Column(name = "description", columnDefinition = "TEXT")
     private String description;
@@ -37,7 +42,7 @@ public class Category {
     @Transient
     private UncategorizedTransaction uncategorizedTransaction;
 
-    public enum CategoryType {
-        INCOME, EXPENSE
+    public enum CategoryKind {
+        EXPENSE, INCOME, TRANSFER
     }
 }

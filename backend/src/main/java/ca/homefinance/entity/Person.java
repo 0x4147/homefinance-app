@@ -21,7 +21,7 @@ public class Person {
     @Column(name = "person_id")
     private Integer personId;
 
-    /** Stable business identifier (e.g. ASANKA, DIVYA); matches the person's {@link Transaction.AccountType} name. */
+    /** Stable business identifier (e.g. ASANKA, DIVYA); matches the code of the person's personal {@link Account}. */
     @Column(name = "code", nullable = false, unique = true, length = 20)
     private String code;
 

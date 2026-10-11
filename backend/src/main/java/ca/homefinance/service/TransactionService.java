@@ -6,6 +6,8 @@ import ca.homefinance.dto.TransactionDto;
 import ca.homefinance.dto.TransactionSummary;
 import ca.homefinance.entity.Category;
 import ca.homefinance.entity.Transaction;
+import ca.homefinance.repository.AccountRepository;
+import ca.homefinance.repository.CategoryRepository;
 import ca.homefinance.repository.PersonRepository;
 import ca.homefinance.repository.TransactionRepository;
 import lombok.RequiredArgsConstructor;
@@ -37,8 +39,13 @@ public class TransactionService {
 
     private static final Logger log = LoggerFactory.getLogger(TransactionService.class);
 
+    private static final String ASANKA = "ASANKA";
+    private static final String DIVYA = "DIVYA";
+
     private final TransactionRepository transactionRepository;
     private final PersonRepository personRepository;
+    private final AccountRepository accountRepository;
+    private final CategoryRepository categoryRepository;
     private final TransactionCategorizationService transactionCategorizationService;
 
     public List<Transaction> getAllTransactions() {
@@ -64,36 +71,50 @@ public class TransactionService {
             throw badRequest("Merchant is required");
         }
 
-        Transaction.TransactionType transactionType = parseEnum(Transaction.TransactionType.class,
+        // The form sends a positive amount and says which way the money moved: only an expense is money out.
+        Transaction.TransactionType type = parseEnum(Transaction.TransactionType.class,
                 transactionDto.getTransactionType(), "transaction type");
         BigDecimal magnitude = transactionDto.getAmount().abs();
-        boolean outflowSign = transactionType == Transaction.TransactionType.REFUND
-                || transactionType == Transaction.TransactionType.CARDPAYMENT;
 
         Transaction transaction = new Transaction();
-        transaction.setAmount(outflowSign ? magnitude.negate() : magnitude);
+        transaction.setAmount(type == Transaction.TransactionType.EXPENSE ? magnitude.negate() : magnitude);
         transaction.setDate(transactionDto.getDate());
         transaction.setEntity(transactionDto.getEntity().trim());
         transaction.setDetails(transactionDto.getDetails());
-        transaction.setAccount(parseEnum(Transaction.AccountType.class, transactionDto.getAccount(), "account"));
-        transaction.setTransactionType(transactionType);
+        transaction.setAccount(accountRepository.findByCode(transactionDto.getAccount())
+                .orElseThrow(() -> badRequest("Invalid account: " + transactionDto.getAccount())));
         transaction.setPerson(personRepository.findById(parseId(transactionDto.getPerson(), "person"))
                 .orElseThrow(() -> badRequest("Unknown person")));
 
-        if (!allowDuplicate && transactionRepository.countByAccountAndDateAndEntityAndAmount(
-                transaction.getAccount(), transaction.getDate(), transaction.getEntity(), transaction.getAmount()) > 0) {
+        if (!allowDuplicate && transactionRepository.countByAccount_CodeAndDateAndEntityAndAmount(
+                transaction.getAccount().getCode(), transaction.getDate(), transaction.getEntity(), transaction.getAmount()) > 0) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "A transaction with the same account, date, merchant and amount already exists");
         }
 
-        Category category = transactionCategorizationService.categorizeTransaction(
-                transaction.getEntity(), transaction.getDetails(), transaction.getAmount(), transaction.getDate());
+        Category category = resolveCategory(transactionDto.getCategory());
+        if (category == null) {
+            category = transactionCategorizationService.categorizeTransaction(
+                    transaction.getEntity(), transaction.getDetails(), transaction.getAmount(), transaction.getDate());
+        }
         if (category.getCategoryId() != null) {
             transaction.setCategory(category);
         } else {
             transaction.setUncategorizedTransaction(category.getUncategorizedTransaction());
         }
         return saveTransaction(transaction);
+    }
+
+    /** The category the user picked, or null to let the categorizer decide. */
+    private Category resolveCategory(String name) {
+        if (name == null || name.isBlank()) {
+            return null;
+        }
+        Category category = categoryRepository.findByName(name.trim());
+        if (category == null) {
+            throw badRequest("Unknown category: " + name);
+        }
+        return category;
     }
 
     private static <E extends Enum<E>> E parseEnum(Class<E> type, String value, String field) {
@@ -126,56 +147,18 @@ public class TransactionService {
                 .collect(Collectors.toList());
     }
 
-    public List<Transaction> searchTransactionByDateRangeAccountTypeTransactionType(LocalDate startDate, LocalDate endDate, List<Transaction.AccountType> accounts, List<Transaction.TransactionType> transactionTypes) {
-        return transactionRepository.searchTransactionByDateRangeAccountTypeTransactionType(startDate, endDate, accounts, transactionTypes);
-    }
-
-    /** The transactions that make up a month's balance, grouped by how each group contributes. */
-    private record BalanceInputs(List<Transaction> expenses, List<Transaction> cardSpending,
-                                 List<Transaction> rentalBillIncome, List<Transaction> rentalRentIncome,
-                                 List<Transaction> billsPaid) {
-    }
-
-    private BalanceInputs loadBalanceInputs(int month, int year) {
+    /**
+     * The transactions that make up a month's shared-expense balance: shared, and in a category that counts.
+     * Each is paid by its account's payer (CIBC and AMEX are settled by one person whichever card was used).
+     */
+    private List<Transaction> loadBalanceTransactions(int month, int year) {
         LocalDate startDate = LocalDate.of(year, month, 1);
         LocalDate endDate = startDate.withDayOfMonth(startDate.lengthOfMonth());
-
-        List<Transaction> expenses = sharedOnly(searchTransactionByDateRangeAccountTypeTransactionType(
-                startDate, endDate,
-                Arrays.asList(Transaction.AccountType.ASANKA, Transaction.AccountType.DIVYA),
-                Arrays.asList(Transaction.TransactionType.EXPENSE)));
-
-        // CIBC and AMEX hold shared/common purchases only, regardless of whose physical card was used,
-        // so every purchase (and its refunds) counts toward the shared pool - not just the CARDPAYMENT
-        // rows, which merely record when the bill happens to get paid and lag behind the spending by a
-        // billing cycle. Divya settles both cards in full every month, so the net amount is her
-        // contribution to the pool.
-        List<Transaction> cardSpending = searchTransactionByDateRangeAccountTypeTransactionType(
-                startDate, endDate,
-                Arrays.asList(Transaction.AccountType.CIBC, Transaction.AccountType.AMEX),
-                Arrays.asList(Transaction.TransactionType.EXPENSE, Transaction.TransactionType.REFUND));
-
-        List<Transaction> rentalBillIncome = sharedOnly(searchTransactionByDateRangeAccountTypeTransactionType(
-                startDate, endDate,
-                Arrays.asList(Transaction.AccountType.DIVYA, Transaction.AccountType.ASANKA),
-                Arrays.asList(Transaction.TransactionType.RENTALBILLINCOME)));
-
-        List<Transaction> rentalRentIncome = sharedOnly(searchTransactionByDateRangeAccountTypeTransactionType(
-                startDate, endDate,
-                Arrays.asList(Transaction.AccountType.DIVYA, Transaction.AccountType.ASANKA),
-                Arrays.asList(Transaction.TransactionType.RENTALRENTINCOME)));
-
-        List<Transaction> billsPaid = sharedOnly(searchTransactionByDateRangeAccountTypeTransactionType(
-                startDate, endDate,
-                Arrays.asList(Transaction.AccountType.DIVYA, Transaction.AccountType.ASANKA),
-                Arrays.asList(Transaction.TransactionType.BILL)));
-
-        return new BalanceInputs(expenses, cardSpending, rentalBillIncome, rentalRentIncome, billsPaid);
+        return transactionRepository.findBalanceTransactions(startDate, endDate);
     }
 
-    /** Personal (non-shared) transactions never take part in the shared-expense balance. */
-    private static List<Transaction> sharedOnly(List<Transaction> transactions) {
-        return transactions.stream().filter(Transaction::isShared).collect(Collectors.toList());
+    private static String payerCode(Transaction tx) {
+        return tx.getAccount().getPayer().getCode();
     }
 
     /**
@@ -186,61 +169,25 @@ public class TransactionService {
         if (month < 1 || month > 12) {
             throw badRequest("Month must be between 1 and 12");
         }
-        Transaction.AccountType account;
-        try {
-            account = Transaction.AccountType.valueOf(person == null ? "" : person.toUpperCase());
-        } catch (IllegalArgumentException e) {
-            throw badRequest("Invalid person: " + person);
-        }
-        if (account != Transaction.AccountType.ASANKA && account != Transaction.AccountType.DIVYA) {
+        String payer = person == null ? "" : person.toUpperCase();
+        if (!payer.equals(ASANKA) && !payer.equals(DIVYA)) {
             throw badRequest("Invalid person: " + person);
         }
 
-        BalanceInputs inputs = loadBalanceInputs(month, year);
-        List<BalanceLineDto> lines = new ArrayList<>();
-        addBalanceLines(lines, inputs.expenses(), account, "EXPENSE", false);
-        addBalanceLines(lines, inputs.billsPaid(), account, "BILL", false);
-        addBalanceLines(lines, inputs.rentalBillIncome(), account, "RENTAL_BILL_INCOME", true);
-        addBalanceLines(lines, inputs.rentalRentIncome(), account, "RENTAL_RENT_INCOME", true);
-        if (account == Transaction.AccountType.DIVYA) {
-            // Shared CIBC/AMEX spending is attributed to Divya, whichever card was used.
-            addBalanceLines(lines, inputs.cardSpending(), null, "CARD_SPENDING", false);
-        }
-        lines.sort(Comparator.comparing((BalanceLineDto l) -> l.getTransaction().getDate()));
+        List<BalanceLineDto> lines = loadBalanceTransactions(month, year).stream()
+                .filter(tx -> payerCode(tx).equals(payer))
+                .map(tx -> new BalanceLineDto(toDto(tx), tx.balanceContribution(), tx.getType().name()))
+                .sorted(Comparator.comparing((BalanceLineDto l) -> l.getTransaction().getDate()))
+                .collect(Collectors.toList());
         return lines;
     }
 
-    private void addBalanceLines(List<BalanceLineDto> lines, List<Transaction> source,
-                                 Transaction.AccountType account, String kind, boolean negate) {
-        for (Transaction tx : source) {
-            if (account != null && tx.getAccount() != account) {
-                continue;
-            }
-            lines.add(new BalanceLineDto(toDto(tx), negate ? tx.getAmount().negate() : tx.getAmount(), kind));
-        }
-    }
-
     public MonthlyBalanceResponseDto getMonthlyBalance(int month, int year) {
-        BalanceInputs inputs = loadBalanceInputs(month, year);
+        List<Transaction> transactions = loadBalanceTransactions(month, year);
 
-        BigDecimal[] expenseTotals = splitByAccount(inputs.expenses());
-        BigDecimal cardSpendingNet = inputs.cardSpending().stream()
-                .map(Transaction::getAmount)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-        BigDecimal[] rentalBillTotals = splitByAccount(inputs.rentalBillIncome());
-        BigDecimal[] rentalRentTotals = splitByAccount(inputs.rentalRentIncome());
-        BigDecimal[] billTotals = splitByAccount(inputs.billsPaid());
-
-        BigDecimal totalExpensesMinusIncomeAsanka = expenseTotals[0]
-                .add(billTotals[0])
-                .subtract(rentalBillTotals[0])
-                .subtract(rentalRentTotals[0]);
-
-        BigDecimal totalExpensesMinusIncomeDivya = expenseTotals[1]
-                .add(billTotals[1])
-                .add(cardSpendingNet)
-                .subtract(rentalBillTotals[1])
-                .subtract(rentalRentTotals[1]);
+        // Net contribution: spending adds, rental income and refunds subtract (negative when income exceeds spending).
+        BigDecimal totalExpensesMinusIncomeAsanka = paidBy(transactions, ASANKA);
+        BigDecimal totalExpensesMinusIncomeDivya = paidBy(transactions, DIVYA);
 
         // if minus value they owe the other person, if plus the other person owes.
         BigDecimal amountDividedByTwoAsanka = totalExpensesMinusIncomeAsanka.divide(BigDecimal.valueOf(2), RoundingMode.HALF_UP);
@@ -249,7 +196,6 @@ public class TransactionService {
 
         MonthlyBalanceResponseDto monthlyBalanceResponseDto = new MonthlyBalanceResponseDto();
         monthlyBalanceResponseDto.setBalanceAmount(difference.abs());
-        // Net contribution: negative when rental income received exceeds what the person paid out.
         monthlyBalanceResponseDto.setAsankaPaid(totalExpensesMinusIncomeAsanka);
         monthlyBalanceResponseDto.setDivyaPaid(totalExpensesMinusIncomeDivya);
         monthlyBalanceResponseDto.setMonthAndYear(month + ", " + year);
@@ -263,6 +209,13 @@ public class TransactionService {
         }
 
         return monthlyBalanceResponseDto;
+    }
+
+    private static BigDecimal paidBy(List<Transaction> transactions, String payer) {
+        return transactions.stream()
+                .filter(tx -> payerCode(tx).equals(payer))
+                .map(Transaction::balanceContribution)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
     public TransactionSummary getExpensesByCategory(LocalDate startDate, LocalDate endDate) {
@@ -311,8 +264,8 @@ public class TransactionService {
                 tx.getDate(),
                 tx.getEntity(),
                 tx.getDetails(),
-                tx.getAccount().name(),
-                tx.getTransactionType().name(),
+                tx.getAccount().getCode(),
+                tx.getType().name(),
                 tx.getCategory() != null ? tx.getCategory().getName() : "Unknown",
                 tx.getPerson() != null ? tx.getPerson().getName() : ""
         );
@@ -326,10 +279,10 @@ public class TransactionService {
         Map<String, List<Transaction>> details = detailsMapSupplier.get();
 
         for (Transaction tx : transactions) {
-            if (tx.getTransactionType() == Transaction.TransactionType.EXPENSE
-                    || tx.getTransactionType() == Transaction.TransactionType.BILL) {
+            if (tx.getType() == Transaction.TransactionType.EXPENSE) {
                 String key = keyExtractor.apply(tx);
-                totals.merge(key, tx.getAmount(), BigDecimal::add);
+                // Spending is stored as money out (negative); report it as a positive total.
+                totals.merge(key, tx.getAmount().negate(), BigDecimal::add);
                 details.computeIfAbsent(key, k -> new ArrayList<>()).add(tx);
             }
         }
@@ -353,20 +306,5 @@ public class TransactionService {
                 .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
 
         return new TransactionSummary(top10Totals, top10Details);
-    }
-
-    private static BigDecimal[] splitByAccount(List<Transaction> transactions) {
-        BigDecimal asankaTotal = BigDecimal.ZERO;
-        BigDecimal divyaTotal = BigDecimal.ZERO;
-
-        for (Transaction txn : transactions) {
-            if (txn.getAccount() == Transaction.AccountType.ASANKA) {
-                asankaTotal = asankaTotal.add(txn.getAmount());
-            } else if (txn.getAccount() == Transaction.AccountType.DIVYA) {
-                divyaTotal = divyaTotal.add(txn.getAmount());
-            }
-        }
-
-        return new BigDecimal[]{asankaTotal, divyaTotal};
     }
 }

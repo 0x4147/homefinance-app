@@ -5,7 +5,6 @@ import ca.homefinance.dto.SettlementDto;
 import ca.homefinance.dto.SettlementRequestDto;
 import ca.homefinance.entity.Person;
 import ca.homefinance.entity.Settlement;
-import ca.homefinance.entity.Transaction;
 import ca.homefinance.repository.PersonRepository;
 import ca.homefinance.repository.SettlementRepository;
 import lombok.RequiredArgsConstructor;
@@ -75,9 +74,9 @@ public class SettlementService {
             throw badRequest("Nobody owes anything for this month");
         }
         Person from = findPerson(balance.getWhoOwes());
-        Person to = findPerson(balance.getWhoOwes().equalsIgnoreCase(Transaction.AccountType.ASANKA.name())
-                ? Transaction.AccountType.DIVYA.name()
-                : Transaction.AccountType.ASANKA.name());
+        Person to = findPerson(balance.getWhoOwes().equalsIgnoreCase("ASANKA")
+                ? "DIVYA"
+                : "ASANKA");
 
         Settlement settlement = settlementRepository.findByPeriodYearAndPeriodMonth(year, month)
                 .orElseGet(Settlement::new);

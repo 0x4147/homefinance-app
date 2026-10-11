@@ -3,7 +3,7 @@ package ca.homefinance.mapper;
 import ca.homefinance.entity.Category;
 import ca.homefinance.entity.PersonCard;
 import ca.homefinance.entity.Transaction;
-import ca.homefinance.helper.GeneralHelper;
+import ca.homefinance.repository.AccountRepository;
 import ca.homefinance.repository.PersonCardRepository;
 import ca.homefinance.service.TransactionCategorizationService;
 import org.slf4j.Logger;
@@ -23,11 +23,14 @@ public class CIBCTransactionFieldMapper implements FieldSetMapper<Transaction> {
     private static final Logger logger = LoggerFactory.getLogger(CIBCTransactionFieldMapper.class);
 
     private final PersonCardRepository personCardRepository;
+    private final AccountRepository accountRepository;
     private final TransactionCategorizationService transactionCategorizationService;
 
     @Autowired
-    public CIBCTransactionFieldMapper(PersonCardRepository personCardRepository, TransactionCategorizationService transactionCategorizationService) {
+    public CIBCTransactionFieldMapper(PersonCardRepository personCardRepository, AccountRepository accountRepository,
+                                      TransactionCategorizationService transactionCategorizationService) {
         this.personCardRepository = personCardRepository;
+        this.accountRepository = accountRepository;
         this.transactionCategorizationService = transactionCategorizationService;
     }
 
@@ -49,26 +52,21 @@ public class CIBCTransactionFieldMapper implements FieldSetMapper<Transaction> {
 
             String amountOutStr = fieldSet.readString("amount out");
             logger.debug("Amount out from field set: '{}'", amountOutStr);
+            // The export has unsigned "out" and "in" columns; stored amounts are signed (out negative, in positive).
             if(!amountOutStr.trim().isEmpty()){
-                BigDecimal amount = new BigDecimal(amountOutStr);
+                BigDecimal amount = new BigDecimal(amountOutStr).abs().negate();
                 logger.debug("Using amount out: {}", amount);
                 transaction.setAmount(amount);
-                Transaction.TransactionType transactionType = GeneralHelper.determineTransactionType(transaction.getEntity(), transaction.getAmount());
-                logger.debug("Determined transaction type: {}", transactionType);
-                transaction.setTransactionType(transactionType);
             }
             else {
                 String amountInStr = fieldSet.readString("amount in");
                 logger.debug("Amount in from field set: '{}'", amountInStr);
-                BigDecimal amount = new BigDecimal(amountInStr).negate();
-                logger.debug("Using negated amount in: {}", amount);
+                BigDecimal amount = new BigDecimal(amountInStr).abs();
+                logger.debug("Using amount in: {}", amount);
                 transaction.setAmount(amount);
-                Transaction.TransactionType transactionType = GeneralHelper.determineTransactionType(transaction.getEntity(), transaction.getAmount());
-                logger.debug("Determined transaction type: {}", transactionType);
-                transaction.setTransactionType(transactionType);
             }
 
-            transaction.setAccount(Transaction.AccountType.CIBC);
+            transaction.setAccount(accountRepository.findByCode("CIBC").orElseThrow());
             
             Category category = transactionCategorizationService.categorizeTransaction(transaction.getEntity(), null, transaction.getAmount(), transaction.getDate());
             if (category.getCategoryId() == null && category.getUncategorizedTransaction() != null){

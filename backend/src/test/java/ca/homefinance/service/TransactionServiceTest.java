@@ -1,11 +1,15 @@
 package ca.homefinance.service;
 
+import ca.homefinance.dto.BalanceLineDto;
 import ca.homefinance.dto.MonthlyBalanceResponseDto;
 import ca.homefinance.dto.TransactionDto;
+import ca.homefinance.entity.Account;
 import ca.homefinance.entity.Category;
 import ca.homefinance.entity.Person;
 import ca.homefinance.entity.Transaction;
 import ca.homefinance.entity.UncategorizedTransaction;
+import ca.homefinance.repository.AccountRepository;
+import ca.homefinance.repository.CategoryRepository;
 import ca.homefinance.repository.PersonRepository;
 import ca.homefinance.repository.TransactionRepository;
 import org.springframework.http.HttpStatus;
@@ -42,6 +46,12 @@ class TransactionServiceTest {
     private PersonRepository personRepository;
 
     @Mock
+    private AccountRepository accountRepository;
+
+    @Mock
+    private CategoryRepository categoryRepository;
+
+    @Mock
     private TransactionCategorizationService transactionCategorizationService;
 
     @InjectMocks
@@ -49,6 +59,12 @@ class TransactionServiceTest {
 
     private Person asanka;
     private Person divya;
+    private Account asankaAccount;
+    private Account divyaAccount;
+    private Account cibc;
+    private Account amex;
+
+    private final Category spending = category(1, "Test Category", Category.CategoryKind.EXPENSE, true);
 
     @BeforeEach
     void setUp() {
@@ -61,24 +77,58 @@ class TransactionServiceTest {
         divya.setPersonId(2);
         divya.setCode("DIVYA");
         divya.setName("Divya");
+
+        // CIBC and AMEX are settled by Divya, whichever card was used
+        asankaAccount = account("ASANKA", asanka);
+        divyaAccount = account("DIVYA", divya);
+        cibc = account("CIBC", divya);
+        amex = account("AMEX", divya);
     }
 
     @Test
-    void createTransaction_ValidExpense_SavesPositiveAmount() {
-        Category groceries = category(3, "Groceries");
+    void createTransaction_ValidExpense_SavesMoneyOut() {
+        Category groceries = category(3, "Groceries", Category.CategoryKind.EXPENSE, true);
         stubCategorizer(groceries);
-        when(personRepository.findById(1)).thenReturn(Optional.of(asanka));
+        stubAccountAndPerson();
         when(transactionRepository.save(any(Transaction.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        Transaction saved = transactionService.createTransaction(dto("25.00", "  Costco ", "CIBC", "EXPENSE", "3", "1"));
+        Transaction saved = transactionService.createTransaction(dto("25.00", "  Costco ", "CIBC", "EXPENSE", null, "1"));
 
-        assertEquals(0, new BigDecimal("25.00").compareTo(saved.getAmount()));
+        assertEquals(0, new BigDecimal("-25.00").compareTo(saved.getAmount()));
         assertEquals("Costco", saved.getEntity());
-        assertEquals(Transaction.TransactionType.EXPENSE, saved.getTransactionType());
-        assertEquals(Transaction.AccountType.CIBC, saved.getAccount());
+        assertEquals(Transaction.TransactionType.EXPENSE, saved.getType());
+        assertSame(cibc, saved.getAccount());
         assertSame(groceries, saved.getCategory());
         assertSame(asanka, saved.getPerson());
         verify(transactionCategorizationService).categorizeTransaction(eq("Costco"), isNull(), any(), any());
+    }
+
+    @Test
+    void createTransaction_ExplicitCategory_IsUsedInsteadOfTheCategorizer() {
+        Category rentalBillIncome = category(30, "Rental Bill Income", Category.CategoryKind.INCOME, true);
+        when(categoryRepository.findByName("Rental Bill Income")).thenReturn(rentalBillIncome);
+        stubAccountAndPerson();
+        when(transactionRepository.save(any(Transaction.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        Transaction saved = transactionService.createTransaction(
+                dto("46.50", "Tenant", "CIBC", "INCOME", "Rental Bill Income", "1"));
+
+        assertEquals(0, new BigDecimal("46.50").compareTo(saved.getAmount()));
+        assertSame(rentalBillIncome, saved.getCategory());
+        assertEquals(Transaction.TransactionType.INCOME, saved.getType());
+        verify(transactionCategorizationService, never()).categorizeTransaction(any(), any(), any(), any());
+    }
+
+    @Test
+    void createTransaction_UnknownCategory_ThrowsBadRequest() {
+        stubAccountAndPerson();
+        when(categoryRepository.findByName("Nope")).thenReturn(null);
+
+        ResponseStatusException ex = assertThrows(ResponseStatusException.class,
+                () -> transactionService.createTransaction(dto("25.00", "Costco", "CIBC", "EXPENSE", "Nope", "1")));
+
+        assertEquals(HttpStatus.BAD_REQUEST, ex.getStatusCode());
+        verify(transactionRepository, never()).save(any());
     }
 
     @Test
@@ -88,7 +138,7 @@ class TransactionServiceTest {
         Category placeholder = new Category();
         placeholder.setUncategorizedTransaction(review);
         stubCategorizer(placeholder);
-        when(personRepository.findById(1)).thenReturn(Optional.of(asanka));
+        stubAccountAndPerson();
         when(transactionRepository.save(any(Transaction.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         Transaction saved = transactionService.createTransaction(dto("25.00", "Mystery Shop", "CIBC", "EXPENSE", null, "1"));
@@ -97,25 +147,22 @@ class TransactionServiceTest {
         assertSame(review, saved.getUncategorizedTransaction());
     }
 
-    private void stubCategorizer(Category result) {
-        when(transactionCategorizationService.categorizeTransaction(any(), any(), any(), any())).thenReturn(result);
-    }
-
     @Test
-    void createTransaction_Refund_StoresNegativeAmount() {
-        stubCategorizer(category(3, "Groceries"));
-        when(personRepository.findById(1)).thenReturn(Optional.of(asanka));
+    void createTransaction_Refund_StoresMoneyIn() {
+        stubCategorizer(category(3, "Groceries", Category.CategoryKind.EXPENSE, true));
+        stubAccountAndPerson();
         when(transactionRepository.save(any(Transaction.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        Transaction saved = transactionService.createTransaction(dto("-25.00", "Costco", "CIBC", "REFUND", "3", "1"));
+        Transaction saved = transactionService.createTransaction(dto("25.00", "Costco", "CIBC", "REFUND", null, "1"));
 
-        assertEquals(0, new BigDecimal("-25.00").compareTo(saved.getAmount()));
+        assertEquals(0, new BigDecimal("25.00").compareTo(saved.getAmount()));
+        assertEquals(Transaction.TransactionType.REFUND, saved.getType());
     }
 
     @Test
     void createTransaction_ZeroAmount_ThrowsBadRequest() {
         ResponseStatusException ex = assertThrows(ResponseStatusException.class,
-                () -> transactionService.createTransaction(dto("0", "Costco", "CIBC", "EXPENSE", "3", "1")));
+                () -> transactionService.createTransaction(dto("0", "Costco", "CIBC", "EXPENSE", null, "1")));
 
         assertEquals(HttpStatus.BAD_REQUEST, ex.getStatusCode());
     }
@@ -123,19 +170,19 @@ class TransactionServiceTest {
     @Test
     void createTransaction_InvalidAccount_ThrowsBadRequest() {
         ResponseStatusException ex = assertThrows(ResponseStatusException.class,
-                () -> transactionService.createTransaction(dto("25.00", "Costco", "BANK", "EXPENSE", "3", "1")));
+                () -> transactionService.createTransaction(dto("25.00", "Costco", "BANK", "EXPENSE", null, "1")));
 
         assertEquals(HttpStatus.BAD_REQUEST, ex.getStatusCode());
     }
 
     @Test
     void createTransaction_ExistingMatch_ThrowsConflictWithoutSaving() {
-        when(personRepository.findById(1)).thenReturn(Optional.of(asanka));
-        when(transactionRepository.countByAccountAndDateAndEntityAndAmount(
-                eq(Transaction.AccountType.CIBC), any(), eq("Costco"), any())).thenReturn(1L);
+        stubAccountAndPerson();
+        when(transactionRepository.countByAccount_CodeAndDateAndEntityAndAmount(
+                eq("CIBC"), any(), eq("Costco"), any())).thenReturn(1L);
 
         ResponseStatusException ex = assertThrows(ResponseStatusException.class,
-                () -> transactionService.createTransaction(dto("25.00", "Costco", "CIBC", "EXPENSE", "3", "1")));
+                () -> transactionService.createTransaction(dto("25.00", "Costco", "CIBC", "EXPENSE", null, "1")));
 
         assertEquals(HttpStatus.CONFLICT, ex.getStatusCode());
         verify(transactionRepository, never()).save(any());
@@ -144,318 +191,53 @@ class TransactionServiceTest {
 
     @Test
     void createTransaction_ExistingMatchAndAllowDuplicate_Saves() {
-        stubCategorizer(category(3, "Groceries"));
-        when(personRepository.findById(1)).thenReturn(Optional.of(asanka));
+        stubCategorizer(category(3, "Groceries", Category.CategoryKind.EXPENSE, true));
+        stubAccountAndPerson();
         when(transactionRepository.save(any(Transaction.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        Transaction saved = transactionService.createTransaction(dto("25.00", "Costco", "CIBC", "EXPENSE", "3", "1"), true);
+        Transaction saved = transactionService.createTransaction(dto("25.00", "Costco", "CIBC", "EXPENSE", null, "1"), true);
 
-        assertEquals(0, new BigDecimal("25.00").compareTo(saved.getAmount()));
+        assertEquals(0, new BigDecimal("-25.00").compareTo(saved.getAmount()));
         verify(transactionRepository).save(any(Transaction.class));
     }
 
     @Test
     void createTransaction_NoExistingMatch_SavesWithoutOverride() {
-        stubCategorizer(category(3, "Groceries"));
-        when(personRepository.findById(1)).thenReturn(Optional.of(asanka));
-        when(transactionRepository.countByAccountAndDateAndEntityAndAmount(
+        stubCategorizer(category(3, "Groceries", Category.CategoryKind.EXPENSE, true));
+        stubAccountAndPerson();
+        when(transactionRepository.countByAccount_CodeAndDateAndEntityAndAmount(
                 any(), any(), any(), any())).thenReturn(0L);
         when(transactionRepository.save(any(Transaction.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        transactionService.createTransaction(dto("25.00", "Costco", "CIBC", "EXPENSE", "3", "1"));
+        transactionService.createTransaction(dto("25.00", "Costco", "CIBC", "EXPENSE", null, "1"));
 
         verify(transactionRepository).save(any(Transaction.class));
     }
 
-    private static TransactionDto dto(String amount, String entity, String account, String type, String category, String person) {
-        return new TransactionDto(new BigDecimal(amount), LocalDate.of(2024, 2, 1), entity, null,
-                account, type, category, person);
-    }
-
-    private static Category category(int id, String name) {
-        Category category = new Category();
-        category.setCategoryId(id);
-        category.setName(name);
-        return category;
-    }
+    // The balance query returns only shared transactions in counting categories (the filtering itself is
+    // covered by MonthlyBalanceIntegrationTest); the service splits them by who funds the account.
 
     @Test
-    void searchTransactionByDateRangeAccountTypeTransactionType_ShouldReturnFilteredTransactions() {
-        // Given
-        LocalDate startDate = LocalDate.of(2024, 1, 1);
-        LocalDate endDate = LocalDate.of(2024, 1, 31);
-        List<Transaction.AccountType> accounts = Arrays.asList(Transaction.AccountType.ASANKA, Transaction.AccountType.DIVYA);
-        List<Transaction.TransactionType> transactionTypes = Arrays.asList(Transaction.TransactionType.EXPENSE);
-
-        Transaction asankaExpense = createTransaction(1, new BigDecimal("100.00"), 
-                LocalDate.of(2024, 1, 15), "Store A", "Expense", 
-                Transaction.AccountType.ASANKA, Transaction.TransactionType.EXPENSE, asanka);
-
-        Transaction divyaExpense = createTransaction(2, new BigDecimal("50.00"), 
-                LocalDate.of(2024, 1, 20), "Store B", "Expense", 
-                Transaction.AccountType.DIVYA, Transaction.TransactionType.EXPENSE, divya);
-
-        List<Transaction> expectedTransactions = Arrays.asList(asankaExpense, divyaExpense);
-
-        when(transactionRepository.searchTransactionByDateRangeAccountTypeTransactionType(
-                startDate, endDate, accounts, transactionTypes))
-                .thenReturn(expectedTransactions);
-
-        // When
-        List<Transaction> result = transactionService.searchTransactionByDateRangeAccountTypeTransactionType(
-                startDate, endDate, accounts, transactionTypes);
-
-        // Then
-        assertNotNull(result);
-        assertEquals(2, result.size());
-        assertEquals(expectedTransactions, result);
-    }
-
-    @Test
-    void searchTransactionByDateRangeAccountTypeTransactionType_EmptyResult_ShouldReturnEmptyList() {
-        // Given
-        LocalDate startDate = LocalDate.of(2024, 1, 1);
-        LocalDate endDate = LocalDate.of(2024, 1, 31);
-        List<Transaction.AccountType> accounts = Arrays.asList(Transaction.AccountType.ASANKA);
-        List<Transaction.TransactionType> transactionTypes = Arrays.asList(Transaction.TransactionType.EXPENSE);
-
-        when(transactionRepository.searchTransactionByDateRangeAccountTypeTransactionType(
-                startDate, endDate, accounts, transactionTypes))
+    void getMonthlyBalance_NothingToCount_ShouldReturnZeroBalance() {
+        when(transactionRepository.findBalanceTransactions(LocalDate.of(2024, 1, 1), LocalDate.of(2024, 1, 31)))
                 .thenReturn(Collections.emptyList());
 
-        // When
-        List<Transaction> result = transactionService.searchTransactionByDateRangeAccountTypeTransactionType(
-                startDate, endDate, accounts, transactionTypes);
-
-        // Then
-        assertNotNull(result);
-        assertTrue(result.isEmpty());
-    }
-
-    @Test
-    void searchTransactionByDateRangeAccountTypeTransactionType_NullParameters_ShouldHandleGracefully() {
-        // Given
-        LocalDate startDate = LocalDate.of(2024, 1, 1);
-        LocalDate endDate = LocalDate.of(2024, 1, 31);
-
-        when(transactionRepository.searchTransactionByDateRangeAccountTypeTransactionType(
-                startDate, endDate, null, null))
-                .thenReturn(Collections.emptyList());
-
-        // When
-        List<Transaction> result = transactionService.searchTransactionByDateRangeAccountTypeTransactionType(
-                startDate, endDate, null, null);
-
-        // Then
-        assertNotNull(result);
-        assertTrue(result.isEmpty());
-    }
-
-    @Test
-    void searchTransactionByDateRangeAccountTypeTransactionType_CrossMonthBoundary_ShouldIncludeAllDates() {
-        // Given
-        LocalDate startDate = LocalDate.of(2024, 1, 15);
-        LocalDate endDate = LocalDate.of(2024, 2, 15);
-        List<Transaction.AccountType> accounts = Arrays.asList(Transaction.AccountType.ASANKA);
-        List<Transaction.TransactionType> transactionTypes = Arrays.asList(Transaction.TransactionType.EXPENSE);
-
-        Transaction januaryTransaction = createTransaction(1, new BigDecimal("100.00"), 
-                LocalDate.of(2024, 1, 20), "Store A", "January expense", 
-                Transaction.AccountType.ASANKA, Transaction.TransactionType.EXPENSE, asanka);
-
-        Transaction februaryTransaction = createTransaction(2, new BigDecimal("50.00"), 
-                LocalDate.of(2024, 2, 10), "Store B", "February expense", 
-                Transaction.AccountType.ASANKA, Transaction.TransactionType.EXPENSE, asanka);
-
-        List<Transaction> expectedTransactions = Arrays.asList(januaryTransaction, februaryTransaction);
-
-        when(transactionRepository.searchTransactionByDateRangeAccountTypeTransactionType(
-                startDate, endDate, accounts, transactionTypes))
-                .thenReturn(expectedTransactions);
-
-        // When
-        List<Transaction> result = transactionService.searchTransactionByDateRangeAccountTypeTransactionType(
-                startDate, endDate, accounts, transactionTypes);
-
-        // Then
-        assertNotNull(result);
-        assertEquals(2, result.size());
-        assertTrue(result.stream().anyMatch(t -> t.getDate().getMonthValue() == 1));
-        assertTrue(result.stream().anyMatch(t -> t.getDate().getMonthValue() == 2));
-    }
-
-    @Test
-    void searchTransactionByDateRangeAccountTypeTransactionType_MultipleAccountTypes_ShouldReturnAllMatching() {
-        // Given
-        LocalDate startDate = LocalDate.of(2024, 1, 1);
-        LocalDate endDate = LocalDate.of(2024, 1, 31);
-        List<Transaction.AccountType> accounts = Arrays.asList(
-                Transaction.AccountType.ASANKA, 
-                Transaction.AccountType.DIVYA,
-                Transaction.AccountType.CIBC
-        );
-        List<Transaction.TransactionType> transactionTypes = Arrays.asList(Transaction.TransactionType.EXPENSE);
-
-        Transaction asankaTransaction = createTransaction(1, new BigDecimal("100.00"), 
-                LocalDate.of(2024, 1, 15), "Store A", "Asanka expense", 
-                Transaction.AccountType.ASANKA, Transaction.TransactionType.EXPENSE, asanka);
-
-        Transaction divyaTransaction = createTransaction(2, new BigDecimal("50.00"), 
-                LocalDate.of(2024, 1, 20), "Store B", "Divya expense", 
-                Transaction.AccountType.DIVYA, Transaction.TransactionType.EXPENSE, divya);
-
-        Transaction cibcTransaction = createTransaction(3, new BigDecimal("75.00"), 
-                LocalDate.of(2024, 1, 25), "Store C", "CIBC expense", 
-                Transaction.AccountType.CIBC, Transaction.TransactionType.EXPENSE, asanka);
-
-        List<Transaction> expectedTransactions = Arrays.asList(asankaTransaction, divyaTransaction, cibcTransaction);
-
-        when(transactionRepository.searchTransactionByDateRangeAccountTypeTransactionType(
-                startDate, endDate, accounts, transactionTypes))
-                .thenReturn(expectedTransactions);
-
-        // When
-        List<Transaction> result = transactionService.searchTransactionByDateRangeAccountTypeTransactionType(
-                startDate, endDate, accounts, transactionTypes);
-
-        // Then
-        assertNotNull(result);
-        assertEquals(3, result.size());
-        assertTrue(result.stream().anyMatch(t -> t.getAccount() == Transaction.AccountType.ASANKA));
-        assertTrue(result.stream().anyMatch(t -> t.getAccount() == Transaction.AccountType.DIVYA));
-        assertTrue(result.stream().anyMatch(t -> t.getAccount() == Transaction.AccountType.CIBC));
-    }
-
-    @Test
-    void searchTransactionByDateRangeAccountTypeTransactionType_MultipleTransactionTypes_ShouldReturnAllMatching() {
-        // Given
-        LocalDate startDate = LocalDate.of(2024, 1, 1);
-        LocalDate endDate = LocalDate.of(2024, 1, 31);
-        List<Transaction.AccountType> accounts = Arrays.asList(Transaction.AccountType.ASANKA);
-        List<Transaction.TransactionType> transactionTypes = Arrays.asList(
-                Transaction.TransactionType.EXPENSE,
-                Transaction.TransactionType.BILL,
-                Transaction.TransactionType.CARDPAYMENT
-        );
-
-        Transaction expenseTransaction = createTransaction(1, new BigDecimal("100.00"), 
-                LocalDate.of(2024, 1, 15), "Store A", "Expense", 
-                Transaction.AccountType.ASANKA, Transaction.TransactionType.EXPENSE, asanka);
-
-        Transaction billTransaction = createTransaction(2, new BigDecimal("50.00"), 
-                LocalDate.of(2024, 1, 20), "Utility", "Bill", 
-                Transaction.AccountType.ASANKA, Transaction.TransactionType.BILL, asanka);
-
-        Transaction cardPaymentTransaction = createTransaction(3, new BigDecimal("75.00"), 
-                LocalDate.of(2024, 1, 25), "Card Payment", "Card payment", 
-                Transaction.AccountType.ASANKA, Transaction.TransactionType.CARDPAYMENT, asanka);
-
-        List<Transaction> expectedTransactions = Arrays.asList(expenseTransaction, billTransaction, cardPaymentTransaction);
-
-        when(transactionRepository.searchTransactionByDateRangeAccountTypeTransactionType(
-                startDate, endDate, accounts, transactionTypes))
-                .thenReturn(expectedTransactions);
-
-        // When
-        List<Transaction> result = transactionService.searchTransactionByDateRangeAccountTypeTransactionType(
-                startDate, endDate, accounts, transactionTypes);
-
-        // Then
-        assertNotNull(result);
-        assertEquals(3, result.size());
-        assertTrue(result.stream().anyMatch(t -> t.getTransactionType() == Transaction.TransactionType.EXPENSE));
-        assertTrue(result.stream().anyMatch(t -> t.getTransactionType() == Transaction.TransactionType.BILL));
-        assertTrue(result.stream().anyMatch(t -> t.getTransactionType() == Transaction.TransactionType.CARDPAYMENT));
-    }
-
-    @Test
-    void searchTransactionByDateRangeAccountTypeTransactionType_SameDayTransactions_ShouldIncludeAll() {
-        // Given
-        LocalDate startDate = LocalDate.of(2024, 1, 15);
-        LocalDate endDate = LocalDate.of(2024, 1, 15);
-        List<Transaction.AccountType> accounts = Arrays.asList(Transaction.AccountType.ASANKA);
-        List<Transaction.TransactionType> transactionTypes = Arrays.asList(Transaction.TransactionType.EXPENSE);
-
-        Transaction morningTransaction = createTransaction(1, new BigDecimal("25.00"), 
-                LocalDate.of(2024, 1, 15), "Morning Store", "Morning expense", 
-                Transaction.AccountType.ASANKA, Transaction.TransactionType.EXPENSE, asanka);
-
-        Transaction afternoonTransaction = createTransaction(2, new BigDecimal("35.00"), 
-                LocalDate.of(2024, 1, 15), "Afternoon Store", "Afternoon expense", 
-                Transaction.AccountType.ASANKA, Transaction.TransactionType.EXPENSE, asanka);
-
-        List<Transaction> expectedTransactions = Arrays.asList(morningTransaction, afternoonTransaction);
-
-        when(transactionRepository.searchTransactionByDateRangeAccountTypeTransactionType(
-                startDate, endDate, accounts, transactionTypes))
-                .thenReturn(expectedTransactions);
-
-        // When
-        List<Transaction> result = transactionService.searchTransactionByDateRangeAccountTypeTransactionType(
-                startDate, endDate, accounts, transactionTypes);
-
-        // Then
-        assertNotNull(result);
-        assertEquals(2, result.size());
-        assertTrue(result.stream().allMatch(t -> t.getDate().equals(LocalDate.of(2024, 1, 15))));
-    }
-
-    @Test
-    void getMonthlyBalance_EqualPayments_ShouldReturnZeroBalance() {
-        // Given
-        LocalDate startDate = LocalDate.of(2024, 1, 1);
-        LocalDate endDate = LocalDate.of(2024, 1, 31);
-
-        when(transactionRepository.searchTransactionByDateRangeAccountTypeTransactionType(
-                eq(startDate), eq(endDate), any(), any()))
-                .thenReturn(Collections.emptyList());
-
-        // When
         MonthlyBalanceResponseDto result = transactionService.getMonthlyBalance(1, 2024);
 
-        // Then
-        assertEquals(BigDecimal.ZERO, result.getBalanceAmount());
-        assertEquals(BigDecimal.ZERO, result.getAsankaPaid());
-        assertEquals(BigDecimal.ZERO, result.getDivyaPaid());
+        assertEquals(0, BigDecimal.ZERO.compareTo(result.getBalanceAmount()));
+        assertEquals(0, BigDecimal.ZERO.compareTo(result.getAsankaPaid()));
+        assertEquals(0, BigDecimal.ZERO.compareTo(result.getDivyaPaid()));
         assertEquals("1, 2024", result.getMonthAndYear());
         assertNull(result.getWhoOwes());
     }
 
     @Test
-    void getMonthlyBalance_AsankaOwesDivya_ShouldReturnCorrectBalance() {
-        // Given
-        LocalDate startDate = LocalDate.of(2024, 1, 1);
-        LocalDate endDate = LocalDate.of(2024, 1, 31);
+    void getMonthlyBalance_AsankaPaidMore_DivyaOwes() {
+        stubBalance(spend(1, "100.00", asankaAccount, asanka));
 
-        Transaction asankaExpense = createTransaction(1, new BigDecimal("100.00"),
-                LocalDate.of(2024, 1, 15), "Test Store", "Test expense",
-                Transaction.AccountType.ASANKA, Transaction.TransactionType.EXPENSE, asanka);
-
-        when(transactionRepository.searchTransactionByDateRangeAccountTypeTransactionType(
-                eq(startDate), eq(endDate),
-                eq(Arrays.asList(Transaction.AccountType.ASANKA, Transaction.AccountType.DIVYA)),
-                eq(Arrays.asList(Transaction.TransactionType.EXPENSE))))
-                .thenReturn(Arrays.asList(asankaExpense));
-
-        when(transactionRepository.searchTransactionByDateRangeAccountTypeTransactionType(
-                any(LocalDate.class), any(LocalDate.class),
-                eq(Arrays.asList(Transaction.AccountType.DIVYA, Transaction.AccountType.ASANKA)),
-                any()))
-                .thenReturn(Collections.emptyList());
-
-        when(transactionRepository.searchTransactionByDateRangeAccountTypeTransactionType(
-                any(LocalDate.class), any(LocalDate.class),
-                eq(Arrays.asList(Transaction.AccountType.CIBC, Transaction.AccountType.AMEX)),
-                eq(Arrays.asList(Transaction.TransactionType.EXPENSE, Transaction.TransactionType.REFUND))))
-                .thenReturn(Collections.emptyList());
-
-        // When
-        // Asanka paid $100, Divya paid $0
-        // Asanka's share: $100/2 = $50, Divya's share: $0/2 = $0
-        // Difference: $0 - $50 = -$50, so Divya owes Asanka $50
+        // Asanka paid $100, Divya $0: shares $50 vs $0, so Divya owes Asanka $50
         MonthlyBalanceResponseDto result = transactionService.getMonthlyBalance(1, 2024);
 
-        // Then
         assertEquals(0, new BigDecimal("50.0").compareTo(result.getBalanceAmount()));
         assertEquals(0, new BigDecimal("100.0").compareTo(result.getAsankaPaid()));
         assertEquals(0, BigDecimal.ZERO.compareTo(result.getDivyaPaid()));
@@ -463,40 +245,11 @@ class TransactionServiceTest {
     }
 
     @Test
-    void getMonthlyBalance_DivyaOwesAsanka_ShouldReturnCorrectBalance() {
-        // Given
-        LocalDate startDate = LocalDate.of(2024, 1, 1);
-        LocalDate endDate = LocalDate.of(2024, 1, 31);
+    void getMonthlyBalance_DivyaPaidMore_AsankaOwes() {
+        stubBalance(spend(2, "200.00", divyaAccount, divya));
 
-        Transaction divyaExpense = createTransaction(2, new BigDecimal("200.00"),
-                LocalDate.of(2024, 1, 15), "Test Store", "Test expense",
-                Transaction.AccountType.DIVYA, Transaction.TransactionType.EXPENSE, divya);
-
-        when(transactionRepository.searchTransactionByDateRangeAccountTypeTransactionType(
-                eq(startDate), eq(endDate),
-                eq(Arrays.asList(Transaction.AccountType.ASANKA, Transaction.AccountType.DIVYA)),
-                eq(Arrays.asList(Transaction.TransactionType.EXPENSE))))
-                .thenReturn(Arrays.asList(divyaExpense));
-
-        when(transactionRepository.searchTransactionByDateRangeAccountTypeTransactionType(
-                any(LocalDate.class), any(LocalDate.class),
-                eq(Arrays.asList(Transaction.AccountType.DIVYA, Transaction.AccountType.ASANKA)),
-                any()))
-                .thenReturn(Collections.emptyList());
-
-        when(transactionRepository.searchTransactionByDateRangeAccountTypeTransactionType(
-                any(LocalDate.class), any(LocalDate.class),
-                eq(Arrays.asList(Transaction.AccountType.CIBC, Transaction.AccountType.AMEX)),
-                eq(Arrays.asList(Transaction.TransactionType.EXPENSE, Transaction.TransactionType.REFUND))))
-                .thenReturn(Collections.emptyList());
-
-        // When
-        // Asanka paid $0, Divya paid $200
-        // Asanka's share: $0/2 = $0, Divya's share: $200/2 = $100
-        // Difference: $100 - $0 = $100, so Asanka owes Divya $100
         MonthlyBalanceResponseDto result = transactionService.getMonthlyBalance(1, 2024);
 
-        // Then
         assertEquals(0, new BigDecimal("100.0").compareTo(result.getBalanceAmount()));
         assertEquals(0, BigDecimal.ZERO.compareTo(result.getAsankaPaid()));
         assertEquals(0, new BigDecimal("200.0").compareTo(result.getDivyaPaid()));
@@ -504,42 +257,23 @@ class TransactionServiceTest {
     }
 
     @Test
-    void getMonthlyBalance_CardPurchases_ShouldCountFullyTowardDivyaRegardlessOfWhoseCardWasUsed() {
-        // Given - CIBC/AMEX hold shared purchases only; Divya settles both cards in full each month,
-        // so every purchase counts as her contribution no matter whose physical card made it.
-        Transaction asankaCardPurchase = createTransaction(1, new BigDecimal("100.00"),
-                LocalDate.of(2024, 1, 15), "Costco", "Groceries",
-                Transaction.AccountType.CIBC, Transaction.TransactionType.EXPENSE, asanka);
+    void getMonthlyBalance_EqualPayments_NobodyOwes() {
+        stubBalance(spend(1, "100.00", asankaAccount, asanka), spend(2, "100.00", divyaAccount, divya));
 
-        Transaction divyaCardPurchase = createTransaction(2, new BigDecimal("50.00"),
-                LocalDate.of(2024, 1, 18), "Tim Hortons", "Coffee",
-                Transaction.AccountType.AMEX, Transaction.TransactionType.EXPENSE, divya);
-
-        when(transactionRepository.searchTransactionByDateRangeAccountTypeTransactionType(
-                any(LocalDate.class), any(LocalDate.class),
-                eq(Arrays.asList(Transaction.AccountType.CIBC, Transaction.AccountType.AMEX)),
-                eq(Arrays.asList(Transaction.TransactionType.EXPENSE, Transaction.TransactionType.REFUND))))
-                .thenReturn(Arrays.asList(asankaCardPurchase, divyaCardPurchase));
-
-        when(transactionRepository.searchTransactionByDateRangeAccountTypeTransactionType(
-                any(LocalDate.class), any(LocalDate.class),
-                eq(Arrays.asList(Transaction.AccountType.ASANKA, Transaction.AccountType.DIVYA)),
-                eq(Arrays.asList(Transaction.TransactionType.EXPENSE))))
-                .thenReturn(Collections.emptyList());
-
-        when(transactionRepository.searchTransactionByDateRangeAccountTypeTransactionType(
-                any(LocalDate.class), any(LocalDate.class),
-                eq(Arrays.asList(Transaction.AccountType.DIVYA, Transaction.AccountType.ASANKA)),
-                any()))
-                .thenReturn(Collections.emptyList());
-
-        // When
-        // Shared card spend: $100 + $50 = $150, all counted as Divya's contribution
-        // Asanka's share: $0/2 = $0, Divya's share: $150/2 = $75
-        // Difference: $75 - $0 = $75, so Asanka owes Divya $75
         MonthlyBalanceResponseDto result = transactionService.getMonthlyBalance(1, 2024);
 
-        // Then
+        assertEquals(0, BigDecimal.ZERO.compareTo(result.getBalanceAmount()));
+        assertNull(result.getWhoOwes());
+    }
+
+    @Test
+    void getMonthlyBalance_CardPurchases_CountFullyTowardDivyaWhoseCardWasUsed() {
+        // CIBC/AMEX hold shared purchases only; Divya settles both cards in full each month,
+        // so every purchase is her contribution no matter whose physical card made it.
+        stubBalance(spend(1, "100.00", cibc, asanka), spend(2, "50.00", amex, divya));
+
+        MonthlyBalanceResponseDto result = transactionService.getMonthlyBalance(1, 2024);
+
         assertEquals(0, new BigDecimal("75.0").compareTo(result.getBalanceAmount()));
         assertEquals(0, BigDecimal.ZERO.compareTo(result.getAsankaPaid()));
         assertEquals(0, new BigDecimal("150.0").compareTo(result.getDivyaPaid()));
@@ -547,34 +281,12 @@ class TransactionServiceTest {
     }
 
     @Test
-    void getMonthlyBalance_CardRefund_ShouldReduceSharedCardSpend() {
-        Transaction cardPurchase = createTransaction(1, new BigDecimal("200.00"),
-                LocalDate.of(2024, 1, 10), "Canadian Tire", "Purchase",
-                Transaction.AccountType.CIBC, Transaction.TransactionType.EXPENSE, asanka);
+    void getMonthlyBalance_CardRefund_ReducesSharedCardSpend() {
+        Transaction purchase = spend(1, "200.00", cibc, asanka);
+        Transaction refund = transaction(2, "49.46", cibc, null, spending);
+        stubBalance(purchase, refund);
 
-        Transaction cardRefund = createTransaction(2, new BigDecimal("-49.46"),
-                LocalDate.of(2024, 1, 21), "Canadian Tire", "Return",
-                Transaction.AccountType.CIBC, Transaction.TransactionType.REFUND, null);
-
-        when(transactionRepository.searchTransactionByDateRangeAccountTypeTransactionType(
-                any(LocalDate.class), any(LocalDate.class),
-                eq(Arrays.asList(Transaction.AccountType.CIBC, Transaction.AccountType.AMEX)),
-                eq(Arrays.asList(Transaction.TransactionType.EXPENSE, Transaction.TransactionType.REFUND))))
-                .thenReturn(Arrays.asList(cardPurchase, cardRefund));
-
-        when(transactionRepository.searchTransactionByDateRangeAccountTypeTransactionType(
-                any(LocalDate.class), any(LocalDate.class),
-                eq(Arrays.asList(Transaction.AccountType.ASANKA, Transaction.AccountType.DIVYA)),
-                eq(Arrays.asList(Transaction.TransactionType.EXPENSE))))
-                .thenReturn(Collections.emptyList());
-
-        when(transactionRepository.searchTransactionByDateRangeAccountTypeTransactionType(
-                any(LocalDate.class), any(LocalDate.class),
-                eq(Arrays.asList(Transaction.AccountType.DIVYA, Transaction.AccountType.ASANKA)),
-                any()))
-                .thenReturn(Collections.emptyList());
-
-        // Net shared card spend: $200 - $49.46 = $150.54, all counted as Divya's contribution
+        // Net shared card spend: $200 - $49.46 = $150.54, all Divya's contribution
         MonthlyBalanceResponseDto result = transactionService.getMonthlyBalance(1, 2024);
 
         assertEquals(0, new BigDecimal("150.54").compareTo(result.getDivyaPaid()));
@@ -583,80 +295,12 @@ class TransactionServiceTest {
     }
 
     @Test
-    void getMonthlyBalance_CardPaymentTransactionType_ShouldBeExcludedFromBalance() {
-        // Given - CARDPAYMENT rows only record bank repayment timing (a billing-cycle behind actual
-        // spending), so they must never feed into the balance; only EXPENSE/REFUND does.
-        Transaction cardBillPayment = createTransaction(1, new BigDecimal("-5861.69"),
-                LocalDate.of(2024, 1, 4), "PAYMENT RECEIVED - THANK YOU", "Bill payment",
-                Transaction.AccountType.AMEX, Transaction.TransactionType.CARDPAYMENT, divya);
-
-        when(transactionRepository.searchTransactionByDateRangeAccountTypeTransactionType(
-                any(LocalDate.class), any(LocalDate.class),
-                eq(Arrays.asList(Transaction.AccountType.CIBC, Transaction.AccountType.AMEX)),
-                eq(Arrays.asList(Transaction.TransactionType.EXPENSE, Transaction.TransactionType.REFUND))))
-                .thenReturn(Collections.emptyList());
-
-        when(transactionRepository.searchTransactionByDateRangeAccountTypeTransactionType(
-                any(LocalDate.class), any(LocalDate.class),
-                eq(Arrays.asList(Transaction.AccountType.ASANKA, Transaction.AccountType.DIVYA)),
-                eq(Arrays.asList(Transaction.TransactionType.EXPENSE))))
-                .thenReturn(Collections.emptyList());
-
-        when(transactionRepository.searchTransactionByDateRangeAccountTypeTransactionType(
-                any(LocalDate.class), any(LocalDate.class),
-                eq(Arrays.asList(Transaction.AccountType.DIVYA, Transaction.AccountType.ASANKA)),
-                any()))
-                .thenReturn(Collections.emptyList());
-
-        // A CARDPAYMENT-typed transaction is never requested from the repository at all, since the
-        // service no longer queries that type; if it were mistakenly returned by a broader query, it
-        // still shouldn't be counted (the mock above only returns EXPENSE/REFUND rows, so this asserts
-        // the balance ignores a $5,861.69 payment entirely).
-        assertNotNull(cardBillPayment);
-        MonthlyBalanceResponseDto result = transactionService.getMonthlyBalance(1, 2024);
-
-        assertEquals(0, BigDecimal.ZERO.compareTo(result.getDivyaPaid()));
-        assertEquals(0, BigDecimal.ZERO.compareTo(result.getAsankaPaid()));
-        assertNull(result.getWhoOwes());
-    }
-
-    @Test
     void getMonthlyBalance_RentalIncomeExceedsExpenses_ShouldReturnNegativeNetContribution() {
-        Transaction asankaExpense = createTransaction(1, new BigDecimal("500.00"),
-                LocalDate.of(2024, 1, 10), "Store", "Expense",
-                Transaction.AccountType.ASANKA, Transaction.TransactionType.EXPENSE, asanka);
-
-        Transaction asankaRent = createTransaction(2, new BigDecimal("2000.00"),
-                LocalDate.of(2024, 1, 1), "Tenant", "Rent",
-                Transaction.AccountType.ASANKA, Transaction.TransactionType.RENTALRENTINCOME, asanka);
-
-        Transaction divyaExpense = createTransaction(3, new BigDecimal("300.00"),
-                LocalDate.of(2024, 1, 12), "Store", "Expense",
-                Transaction.AccountType.DIVYA, Transaction.TransactionType.EXPENSE, divya);
-
-        when(transactionRepository.searchTransactionByDateRangeAccountTypeTransactionType(
-                any(LocalDate.class), any(LocalDate.class),
-                eq(Arrays.asList(Transaction.AccountType.ASANKA, Transaction.AccountType.DIVYA)),
-                eq(Arrays.asList(Transaction.TransactionType.EXPENSE))))
-                .thenReturn(Arrays.asList(asankaExpense, divyaExpense));
-
-        when(transactionRepository.searchTransactionByDateRangeAccountTypeTransactionType(
-                any(LocalDate.class), any(LocalDate.class),
-                eq(Arrays.asList(Transaction.AccountType.DIVYA, Transaction.AccountType.ASANKA)),
-                any()))
-                .thenReturn(Collections.emptyList());
-
-        when(transactionRepository.searchTransactionByDateRangeAccountTypeTransactionType(
-                any(LocalDate.class), any(LocalDate.class),
-                eq(Arrays.asList(Transaction.AccountType.DIVYA, Transaction.AccountType.ASANKA)),
-                eq(Arrays.asList(Transaction.TransactionType.RENTALRENTINCOME))))
-                .thenReturn(Arrays.asList(asankaRent));
-
-        when(transactionRepository.searchTransactionByDateRangeAccountTypeTransactionType(
-                any(LocalDate.class), any(LocalDate.class),
-                eq(Arrays.asList(Transaction.AccountType.CIBC, Transaction.AccountType.AMEX)),
-                eq(Arrays.asList(Transaction.TransactionType.EXPENSE, Transaction.TransactionType.REFUND))))
-                .thenReturn(Collections.emptyList());
+        Category rent = category(31, "Rental Rent Income", Category.CategoryKind.INCOME, true);
+        stubBalance(
+                spend(1, "500.00", asankaAccount, asanka),
+                transaction(2, "2000.00", asankaAccount, asanka, rent),
+                spend(3, "300.00", divyaAccount, divya));
 
         // Asanka: $500 - $2000 = -$1500 net, Divya: $300 net
         // Difference: $150 - (-$750) = $900, so Asanka owes Divya $900
@@ -669,49 +313,42 @@ class TransactionServiceTest {
     }
 
     @Test
-    void getMonthlyBalance_PersonalTransactions_ShouldBeExcludedFromBalance() {
-        Transaction sharedBill = createTransaction(1, new BigDecimal("100.00"),
-                LocalDate.of(2024, 1, 15), "Enbridge Gas", null,
-                Transaction.AccountType.ASANKA, Transaction.TransactionType.BILL, asanka);
-        Transaction personalExpense = createTransaction(2, new BigDecimal("500.00"),
-                LocalDate.of(2024, 1, 16), "Gym gear", null,
-                Transaction.AccountType.ASANKA, Transaction.TransactionType.EXPENSE, asanka);
-        personalExpense.setShared(false);
+    void getMonthlyBalanceTransactions_ListsOnlyThePayersLines_WithTheirContribution() {
+        Category bill = category(32, "Rental Bill Income", Category.CategoryKind.INCOME, true);
+        stubBalance(
+                spend(1, "100.00", asankaAccount, asanka),
+                transaction(2, "40.00", asankaAccount, asanka, bill),
+                spend(3, "60.00", cibc, asanka));
 
-        // Catch-all first: later, more specific stubs take precedence over it.
-        when(transactionRepository.searchTransactionByDateRangeAccountTypeTransactionType(any(), any(), any(), any()))
-                .thenReturn(Collections.emptyList());
-        when(transactionRepository.searchTransactionByDateRangeAccountTypeTransactionType(
-                any(LocalDate.class), any(LocalDate.class),
-                eq(Arrays.asList(Transaction.AccountType.ASANKA, Transaction.AccountType.DIVYA)),
-                eq(Arrays.asList(Transaction.TransactionType.EXPENSE))))
-                .thenReturn(Arrays.asList(personalExpense));
-        when(transactionRepository.searchTransactionByDateRangeAccountTypeTransactionType(
-                any(LocalDate.class), any(LocalDate.class),
-                eq(Arrays.asList(Transaction.AccountType.DIVYA, Transaction.AccountType.ASANKA)),
-                eq(Arrays.asList(Transaction.TransactionType.BILL))))
-                .thenReturn(Arrays.asList(sharedBill));
+        List<BalanceLineDto> lines = transactionService.getMonthlyBalanceTransactions(1, 2024, "asanka");
 
-        MonthlyBalanceResponseDto result = transactionService.getMonthlyBalance(1, 2024);
-
-        // Only the $100 shared bill counts; the $500 personal expense must not be split with Divya.
-        assertEquals(0, new BigDecimal("100.00").compareTo(result.getAsankaPaid()));
-        assertEquals(0, new BigDecimal("50").compareTo(result.getBalanceAmount()));
-        assertEquals("Divya", result.getWhoOwes());
+        assertEquals(2, lines.size());
+        assertEquals(0, new BigDecimal("100.00").compareTo(lines.get(0).getContribution()));
+        assertEquals("EXPENSE", lines.get(0).getKind());
+        assertEquals(0, new BigDecimal("-40.00").compareTo(lines.get(1).getContribution()));
+        assertEquals("INCOME", lines.get(1).getKind());
     }
 
     @Test
-    void getExpensesByCategory_ShouldIncludeBills() {
-        Category utilities = category(4, "Utilities");
-        Transaction bill = createTransaction(1, new BigDecimal("80.00"),
-                LocalDate.of(2024, 1, 15), "Enbridge Gas", null,
-                Transaction.AccountType.ASANKA, Transaction.TransactionType.BILL, asanka);
-        bill.setCategory(utilities);
-        when(transactionRepository.findByDateBetween(any(), any())).thenReturn(Arrays.asList(bill));
+    void getMonthlyBalanceTransactions_InvalidPerson_ThrowsBadRequest() {
+        ResponseStatusException ex = assertThrows(ResponseStatusException.class,
+                () -> transactionService.getMonthlyBalanceTransactions(1, 2024, "CIBC"));
+
+        assertEquals(HttpStatus.BAD_REQUEST, ex.getStatusCode());
+    }
+
+    @Test
+    void getExpensesByCategory_ReportsSpendingAsPositiveTotals() {
+        Category utilities = category(4, "Utilities", Category.CategoryKind.EXPENSE, true);
+        Category rentalBill = category(5, "Rental Bill Income", Category.CategoryKind.INCOME, true);
+        Transaction bill = transaction(1, "-80.00", asankaAccount, asanka, utilities);
+        Transaction income = transaction(2, "50.00", asankaAccount, asanka, rentalBill);
+        when(transactionRepository.findByDateBetween(any(), any())).thenReturn(Arrays.asList(bill, income));
 
         var summary = transactionService.getExpensesByCategory(LocalDate.of(2024, 1, 1), LocalDate.of(2024, 1, 31));
 
         assertEquals(0, new BigDecimal("80.00").compareTo(summary.getTotals().get("Utilities")));
+        assertFalse(summary.getTotals().containsKey("Rental Bill Income"));
     }
 
     @Test
@@ -719,18 +356,55 @@ class TransactionServiceTest {
         assertThrows(java.time.DateTimeException.class, () -> transactionService.getMonthlyBalance(13, 2024));
     }
 
-    private Transaction createTransaction(Integer transactionId, BigDecimal amount, LocalDate date,
-                                        String entity, String details, Transaction.AccountType account,
-                                        Transaction.TransactionType transactionType, Person person) {
+    private void stubCategorizer(Category result) {
+        when(transactionCategorizationService.categorizeTransaction(any(), any(), any(), any())).thenReturn(result);
+    }
+
+    private void stubAccountAndPerson() {
+        when(accountRepository.findByCode("CIBC")).thenReturn(Optional.of(cibc));
+        when(personRepository.findById(1)).thenReturn(Optional.of(asanka));
+    }
+
+    private void stubBalance(Transaction... transactions) {
+        when(transactionRepository.findBalanceTransactions(any(LocalDate.class), any(LocalDate.class)))
+                .thenReturn(Arrays.asList(transactions));
+    }
+
+    private static TransactionDto dto(String amount, String entity, String account, String type, String category, String person) {
+        return new TransactionDto(new BigDecimal(amount), LocalDate.of(2024, 2, 1), entity, null,
+                account, type, category, person);
+    }
+
+    private static Category category(int id, String name, Category.CategoryKind kind, boolean inBalance) {
+        Category category = new Category();
+        category.setCategoryId(id);
+        category.setName(name);
+        category.setKind(kind);
+        category.setInBalance(inBalance);
+        return category;
+    }
+
+    private static Account account(String code, Person payer) {
+        Account account = new Account();
+        account.setCode(code);
+        account.setPayer(payer);
+        return account;
+    }
+
+    /** A shared purchase: money out in a category that counts. */
+    private Transaction spend(Integer id, String amount, Account account, Person person) {
+        return transaction(id, "-" + amount, account, person, spending);
+    }
+
+    private Transaction transaction(Integer id, String amount, Account account, Person person, Category category) {
         Transaction transaction = new Transaction();
-        transaction.setTransactionId(transactionId);
-        transaction.setAmount(amount);
-        transaction.setDate(date);
-        transaction.setEntity(entity);
-        transaction.setDetails(details);
+        transaction.setTransactionId(id);
+        transaction.setAmount(new BigDecimal(amount));
+        transaction.setDate(LocalDate.of(2024, 1, 15));
+        transaction.setEntity("Test Store");
         transaction.setAccount(account);
-        transaction.setTransactionType(transactionType);
         transaction.setPerson(person);
+        transaction.setCategory(category);
         return transaction;
     }
 }

@@ -77,9 +77,13 @@ export const LargestTransactionsCard = ({ transactions, onSelect }: { transactio
 };
 
 // --- Recurring charges ---
+type Cadence = 'Weekly' | 'Bi-weekly' | 'Monthly' | 'Yearly';
+
+const CHARGES_PER_YEAR: Record<Cadence, number> = { 'Weekly': 52, 'Bi-weekly': 26, 'Monthly': 12, 'Yearly': 1 };
+
 type Recurring = {
     merchant: string;
-    cadence: 'Monthly' | 'Yearly';
+    cadence: Cadence;
     amount: number;       // typical charge
     monthlyCost: number;
     lastDate: string;
@@ -113,9 +117,14 @@ const detectRecurring = (transactions: Tx[], now = new Date()): Recurring[] => {
         const gaps = times.slice(1).map((t, i) => (t - times[i]) / DAY_MS);
         const gap = median(gaps);
 
-        const cadence = gap >= 26 && gap <= 35 ? 'Monthly' : gap >= 355 && gap <= 375 ? 'Yearly' : null;
+        const cadence: Cadence | null =
+            gap >= 6 && gap <= 8 ? 'Weekly'
+            : gap >= 13 && gap <= 15 ? 'Bi-weekly'
+            : gap >= 26 && gap <= 35 ? 'Monthly'
+            : gap >= 355 && gap <= 375 ? 'Yearly'
+            : null;
         if (!cadence) return;
-        if (cadence === 'Monthly' && charges.length < 3) return;
+        if (cadence !== 'Yearly' && charges.length < 3) return;
 
         const amounts = charges.map(c => Math.abs(c.amount));
         const typical = median(amounts);
@@ -131,7 +140,7 @@ const detectRecurring = (transactions: Tx[], now = new Date()): Recurring[] => {
             merchant: charges[charges.length - 1].entity,
             cadence,
             amount: amounts[amounts.length - 1],
-            monthlyCost: cadence === 'Monthly' ? typical : typical / 12,
+            monthlyCost: typical * CHARGES_PER_YEAR[cadence] / 12,
             lastDate: charges[charges.length - 1].date,
             count: charges.length,
             priceChange: (amounts[amounts.length - 1] - amounts[0]) / amounts[0],
@@ -153,7 +162,7 @@ export const RecurringChargesCard = ({ transactions, onSelect, className = '' }:
     return (
         <Card
             title="Recurring Charges"
-            subtitle="Merchants that bill on a steady monthly or yearly schedule (past 12 months)"
+            subtitle="Merchants that bill on a steady weekly, bi-weekly, monthly or yearly schedule (past 12 months)"
             className={className}
         >
             {items.length === 0 ? (

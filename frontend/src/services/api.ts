@@ -106,7 +106,8 @@ export interface ReviewGroup {
 export interface Category {
     categoryId: number;
     name: string;
-    type: string;
+    kind: string;
+    inBalance: boolean;
     description?: string;
 }
 

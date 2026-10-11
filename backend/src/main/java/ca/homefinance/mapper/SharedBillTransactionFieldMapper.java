@@ -2,6 +2,7 @@ package ca.homefinance.mapper;
 
 import ca.homefinance.entity.Category;
 import ca.homefinance.entity.Transaction;
+import ca.homefinance.repository.AccountRepository;
 import ca.homefinance.repository.CategoryRepository;
 import ca.homefinance.repository.PersonRepository;
 import ca.homefinance.service.TransactionCategorizationService;
@@ -22,6 +23,10 @@ import java.time.format.DateTimeFormatter;
  * depends on the source, hence {@link #forAccount} rather than a single {@link FieldSetMapper}.
  * <p>
  * {@code details} and {@code category} are optional; a blank category falls back to the categorizer.
+ * <p>
+ * The file's amounts are unsigned: the direction comes from the category. An income category (e.g. Rental Bill
+ * Income) is money in, anything else is money out. A negative amount in the file reverses that, e.g. a
+ * refund on a utility bill.
  */
 @Component
 public class SharedBillTransactionFieldMapper {
@@ -32,33 +37,36 @@ public class SharedBillTransactionFieldMapper {
     private static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter.ofPattern("M/d/yyyy");
 
     private final PersonRepository personRepository;
+    private final AccountRepository accountRepository;
     private final CategoryRepository categoryRepository;
     private final TransactionCategorizationService transactionCategorizationService;
 
     @Autowired
     public SharedBillTransactionFieldMapper(PersonRepository personRepository,
+                                            AccountRepository accountRepository,
                                             CategoryRepository categoryRepository,
                                             TransactionCategorizationService transactionCategorizationService) {
         this.personRepository = personRepository;
+        this.accountRepository = accountRepository;
         this.categoryRepository = categoryRepository;
         this.transactionCategorizationService = transactionCategorizationService;
     }
 
-    public FieldSetMapper<Transaction> forAccount(Transaction.AccountType account) {
-        return fieldSet -> mapFieldSet(fieldSet, account);
+    /** @param accountCode the paying account, which is also the code of the person who paid (ASANKA or DIVYA) */
+    public FieldSetMapper<Transaction> forAccount(String accountCode) {
+        return fieldSet -> mapFieldSet(fieldSet, accountCode);
     }
 
-    Transaction mapFieldSet(FieldSet fieldSet, Transaction.AccountType account) {
+    Transaction mapFieldSet(FieldSet fieldSet, String accountCode) {
         try {
             Transaction transaction = new Transaction();
             transaction.setDate(LocalDate.parse(fieldSet.readString("date").trim(), DATE_FORMAT));
             transaction.setEntity(fieldSet.readString("entity").trim());
-            transaction.setAmount(parseAmount(fieldSet.readString("amount")));
+            BigDecimal rawAmount = parseAmount(fieldSet.readString("amount"));
             transaction.setDetails(blankToNull(fieldSet.readString("details")));
-            transaction.setTransactionType(Transaction.TransactionType.BILL);
-            transaction.setAccount(account);
+            transaction.setAccount(accountRepository.findByCode(accountCode).orElseThrow());
             transaction.setShared(true);
-            transaction.setPerson(personRepository.findByCode(account.name()).orElseThrow());
+            transaction.setPerson(personRepository.findByCode(accountCode).orElseThrow());
 
             Category category = null;
             String categoryName = blankToNull(fieldSet.readString("category"));
@@ -71,19 +79,30 @@ public class SharedBillTransactionFieldMapper {
             }
             if (category == null) {
                 category = transactionCategorizationService.categorizeTransaction(
-                        transaction.getEntity(), transaction.getDetails(), transaction.getAmount(), transaction.getDate());
+                        transaction.getEntity(), transaction.getDetails(), rawAmount, transaction.getDate());
                 if (category.getCategoryId() == null && category.getUncategorizedTransaction() != null) {
                     transaction.setUncategorizedTransaction(category.getUncategorizedTransaction());
                     category = null;
                 }
             }
             transaction.setCategory(category);
+            transaction.setAmount(signedAmount(rawAmount, category));
 
             return transaction;
         } catch (Exception e) {
             logger.error("Error mapping shared bill transaction fields", e);
             throw new RuntimeException(e);
         }
+    }
+
+    /** Income categories are money in; everything else (including uncategorized) is money out. A negative input reverses it. */
+    private static BigDecimal signedAmount(BigDecimal raw, Category category) {
+        boolean moneyIn = category != null && category.getKind() == Category.CategoryKind.INCOME;
+        if (raw.signum() < 0) {
+            moneyIn = !moneyIn;
+        }
+        BigDecimal magnitude = raw.abs();
+        return moneyIn ? magnitude : magnitude.negate();
     }
 
     private static BigDecimal parseAmount(String raw) {
