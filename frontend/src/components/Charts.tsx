@@ -2,8 +2,7 @@ import { useState } from 'react';
 
 // Palette follows the dataviz skill's reference instance (light mode):
 // categorical slots are assigned in fixed order; single-series charts use slot 1 only.
-const SERIES = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300', '#4a3aa7'];
-const OTHER = '#898781';
+const SERIES = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300', '#4a3aa7', '#1aa6c4', '#a8552b', '#6b7280', '#9333ea', '#0f766e'];
 const INK = '#0b0b0b';
 const INK_2 = '#52514e';
 const MUTED = '#898781';
@@ -31,23 +30,12 @@ export const DonutChartCard = ({ title, data, onSliceClick }: {
 }) => {
     const [active, setActive] = useState<number | null>(null);
 
-    // Keep the top 7 entities in their own slot; fold the rest into "Other".
-    const rows = data.labels
+    // Every entity gets its own slot; the API already limits these to the top 10.
+    const slices = data.labels
         .map((label, i) => ({ label, value: Math.abs(data.values[i] ?? 0), index: i }))
         .filter(r => r.value > 0)
-        .sort((a, b) => b.value - a.value);
-    const head = rows.slice(0, SERIES.length);
-    const tail = rows.slice(SERIES.length);
-    const slices = head.map((r, i) => ({ ...r, color: SERIES[i], clickable: true }));
-    if (tail.length) {
-        slices.push({
-            label: `Other (${tail.length})`,
-            value: tail.reduce((s, r) => s + r.value, 0),
-            index: -1,
-            color: OTHER,
-            clickable: false,
-        });
-    }
+        .sort((a, b) => b.value - a.value)
+        .map((r, i) => ({ ...r, color: SERIES[i % SERIES.length], clickable: true }));
     const total = slices.reduce((s, r) => s + r.value, 0);
 
     const R = 80;

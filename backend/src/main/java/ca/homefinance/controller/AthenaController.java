@@ -18,8 +18,14 @@ public class AthenaController {
 
     @GetMapping("/insights")
     public ResponseEntity<Map<String, String>> getInsights() {
+        if (!athenaService.isInsightsEnabled()) {
+            return ResponseEntity.ok(Map.of("status", "paused", "analysis", ""));
+        }
         String analysis = athenaService.generateInsightsForLastThreeMonths();
-        return ResponseEntity.ok(Map.of("analysis", analysis));
+        if (analysis == null) {
+            return ResponseEntity.ok(Map.of("status", "offline", "analysis", ""));
+        }
+        return ResponseEntity.ok(Map.of("status", "online", "analysis", analysis));
     }
 
     @PostMapping("/chat")

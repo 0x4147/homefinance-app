@@ -15,6 +15,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
 import java.math.BigDecimal;
+import java.time.Duration;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.HashMap;
 import java.util.List;
@@ -36,6 +38,18 @@ public class AthenaService {
     @Value("${athena.local.model:deepseek-r1:14b}")
     private String localModel;
 
+    // Transaction data leaves this machine only if external AI is explicitly enabled.
+    @Value("${athena.external.enabled:false}")
+    private boolean externalEnabled;
+
+    // Dashboard insights are paused while the local model output is being tuned.
+    @Value("${athena.insights.enabled:false}")
+    private boolean insightsEnabled;
+
+    public boolean isInsightsEnabled() {
+        return insightsEnabled;
+    }
+
     @Value("${athena.external.provider:openai}")
     private String externalProvider;
 
@@ -48,14 +62,29 @@ public class AthenaService {
     @Value("${athena.external.openai.apiKey:}")
     private String openAiApiKey;
 
-    public String generateInsightsForLastThreeMonths() {
+    private static final Duration INSIGHTS_TTL = Duration.ofHours(1);
+
+    private String cachedInsights;
+    private Instant cachedAt;
+
+    /**
+     * @return the insights text, or null when no permitted AI is reachable (the UI shows an offline state).
+     */
+    public synchronized String generateInsightsForLastThreeMonths() {
+        if (cachedInsights != null && Duration.between(cachedAt, Instant.now()).compareTo(INSIGHTS_TTL) < 0) {
+            return cachedInsights;
+        }
         LocalDate endDate = LocalDate.now();
         LocalDate startDate = endDate.minusMonths(3);
         List<Transaction> transactions = transactionRepository.findByDateBetween(startDate, endDate);
         String systemPrompt = "You are Athena, a helpful financial assistant. Analyze the user's last 3 months of transactions and provide 4-6 concise insights: trends, largest expenses, categories trending up/down, recurring bills, and actionable tips. Output plain paragraphs with bullets where helpful.";
         String userPrompt = buildTransactionsContext(transactions);
-//        return askAthena(systemPrompt, userPrompt);
-        return null;
+        String result = askAthena(systemPrompt, userPrompt);
+        if (result != null) {
+            cachedInsights = result;
+            cachedAt = Instant.now();
+        }
+        return result;
     }
 
     public String chatWithContext(String question, LocalDate startDate, LocalDate endDate) {
@@ -71,7 +100,8 @@ public class AthenaService {
 
         String systemPrompt = "You are Athena, a financial assistant. Use the provided transactions context to answer the user's question accurately. If asked about things outside the data or needing current events, say you'll use the internet knowledge.";
         String userPrompt = "User question: " + question + "\n\n" + buildTransactionsContext(transactions);
-        return askAthena(systemPrompt, userPrompt);
+        String answer = askAthena(systemPrompt, userPrompt);
+        return answer != null ? answer : "Athena is offline. Start the local AI (Ollama) and try again.";
     }
 
     private String buildTransactionsContext(List<Transaction> transactions) {
@@ -114,20 +144,22 @@ public class AthenaService {
                 return localResponse;
             }
         } catch (Exception ex) {
-            log.warn("Local AI failed, will try external provider: {}", ex.getMessage());
+            log.warn("Local AI unavailable: {}", ex.getMessage());
         }
 
-        // 2) Fallback to external (OpenAI by default)
-        try {
-            String externalResponse = callExternalAi(systemPrompt, userPrompt);
-            if (externalResponse != null && !externalResponse.isBlank()) {
-                return externalResponse;
+        // 2) External AI only when explicitly enabled, since it sends transaction data off this machine
+        if (externalEnabled) {
+            try {
+                String externalResponse = callExternalAi(systemPrompt, userPrompt);
+                if (externalResponse != null && !externalResponse.isBlank()) {
+                    return externalResponse;
+                }
+            } catch (Exception ex) {
+                log.error("External AI failed: {}", ex.getMessage());
             }
-        } catch (Exception ex) {
-            log.error("External AI failed: {}", ex.getMessage());
         }
 
-        return "Athena is currently unavailable. Please try again later.";
+        return null;
     }
 
     private String callLocalAi(String systemPrompt, String userPrompt) {
@@ -143,7 +175,7 @@ public class AthenaService {
         HttpEntity<Map<String, Object>> req = new HttpEntity<>(body, headers);
         ResponseEntity<Map<String, Object>> resp = restTemplate.exchange(localAiUrl, HttpMethod.POST, req, (Class<Map<String, Object>>)(Class<?>)Map.class);
         Object responseObj = resp.getBody() != null ? resp.getBody().get("response") : null;
-        return responseObj != null ? responseObj.toString() : null;
+        return responseObj != null ? responseObj.toString().replaceAll("(?s)<think>.*?</think>", "").trim() : null;
     }
 
     private String callExternalAi(String systemPrompt, String userPrompt) {

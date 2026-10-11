@@ -34,12 +34,26 @@ const Card = ({ title, subtitle, className = '', children }: {
     </div>
 );
 
+// Fixed repeating payments (car loan, rent...) share merchant and exact amount; collapse each
+// series to its most recent payment so they don't fill the whole list.
+const collapseRepeats = (txs: Tx[]) => {
+    const groups = new Map<string, Tx[]>();
+    for (const t of txs) {
+        const key = `${(t.entity || '').trim().toLowerCase()}|${Math.abs(t.amount).toFixed(2)}`;
+        groups.set(key, [...(groups.get(key) ?? []), t]);
+    }
+    return Array.from(groups.values()).map(list => {
+        const all = [...list].sort((a, b) => b.date.localeCompare(a.date));
+        return { tx: all[0], all };
+    });
+};
+
 // --- Largest single transactions ---
 export const LargestTransactionsCard = ({ transactions, onSelect }: { transactions: Tx[]; onSelect: OnSelect }) => {
-    const top = transactions
-        .filter(isExpense)
-        .sort((a, b) => Math.abs(b.amount) - Math.abs(a.amount))
+    const entries = collapseRepeats(transactions.filter(isExpense))
+        .sort((a, b) => Math.abs(b.tx.amount) - Math.abs(a.tx.amount))
         .slice(0, 10);
+    const top = entries.map(e => e.tx);
     const max = top.length ? Math.abs(top[0].amount) : 0;
 
     return (
@@ -52,10 +66,18 @@ export const LargestTransactionsCard = ({ transactions, onSelect }: { transactio
                         <li
                             key={`${t.date}-${t.entity}-${t.amount}-${i}`}
                             className="py-2 px-2 rounded-lg cursor-pointer hover:bg-gray-50 transition-colors"
-                            onClick={() => onSelect(`${t.entity} on ${shortDate(t.date)}`, [t])}
+                            onClick={() => {
+                                const all = entries[i].all;
+                                onSelect(all.length > 1 ? `${t.entity} (${all.length} payments)` : `${t.entity} on ${shortDate(t.date)}`, all);
+                            }}
                         >
                             <div className="flex items-center gap-3">
                                 <span className="flex-1 truncate text-sm" style={{ color: INK }}>{t.entity}</span>
+                                {entries[i].all.length > 1 && (
+                                    <span className="text-xs shrink-0 px-1.5 py-0.5 rounded-full bg-gray-100" style={{ color: INK_2 }}>
+                                        ×{entries[i].all.length} repeating
+                                    </span>
+                                )}
                                 <span className="text-sm tabular-nums font-medium" style={{ color: INK }}>
                                     {money(Math.abs(t.amount), 2)}
                                 </span>

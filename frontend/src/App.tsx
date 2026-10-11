@@ -9,6 +9,11 @@ import CategorizationReview from './components/CategorizationReview';
 import MonthlyBalanceChecker from './components/MonthlyBalanceChecker';
 import AddTransaction from './components/AddTransaction';
 import BulkUpload from './components/BulkUpload';
+import { DashboardBanner } from './components/DashboardBanner';
+import { AthenaInsights } from './components/AthenaInsights';
+import { DateRangePicker } from './components/DateRangePicker';
+import { rangeForPreset } from './utils/dateRange';
+import type { RangePreset, DateRange } from './utils/dateRange';
 import { LargestTransactionsCard, RecurringChargesCard } from './components/SpendingBehaviourCards';
 
 // --- Type Definitions for TypeScript ---
@@ -22,104 +27,6 @@ type View =
   | 'MonthlyBalanceChecker'
   | 'AddReceipt'
   | 'CategorizationReview';
-
-// --- Welcome Header Component ---
-const WelcomeHeader = () => {
-    const [currentTime, setCurrentTime] = useState(new Date());
-
-    useEffect(() => {
-        const timer = setInterval(() => {
-            setCurrentTime(new Date());
-        }, 1000);
-
-        return () => clearInterval(timer);
-    }, []);
-
-    const getGreeting = () => {
-        const hour = currentTime.getHours();
-        if (hour < 12) return 'Good Morning';
-        if (hour < 17) return 'Good Afternoon';
-        return 'Good Evening';
-    };
-
-    const formatDate = (date: Date) => {
-        return date.toLocaleDateString('en-US', {
-            weekday: 'long',
-            year: 'numeric',
-            month: 'long',
-            day: 'numeric'
-        });
-    };
-
-    const formatTime = (date: Date) => {
-        return date.toLocaleTimeString('en-US', {
-            hour: '2-digit',
-            minute: '2-digit',
-            second: '2-digit'
-        });
-    };
-
-    return (
-        <div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white p-8 rounded-xl shadow-lg mb-8">
-            <div className="flex items-center justify-between">
-                <div>
-                    <h1 className="text-4xl font-bold mb-2">{getGreeting()}!</h1>
-                    <p className="text-xl opacity-90">Welcome to your Home Finance Dashboard</p>
-                </div>
-                <div className="text-right">
-                    <p className="text-2xl font-semibold">{formatDate(currentTime)}</p>
-                    <p className="text-xl opacity-90">{formatTime(currentTime)}</p>
-                </div>
-            </div>
-        </div>
-    );
-};
-
-// --- Athena Summary Component ---
-const AthenaSummary = () => {
-    const [analysis, setAnalysis] = useState<string>('');
-    const [loading, setLoading] = useState<boolean>(true);
-    const [error, setError] = useState<string>('');
-
-    useEffect(() => {
-        const loadInsights = async () => {
-            try {
-                setLoading(true);
-                setError('');
-                const res = await apiService.getAthenaInsights();
-                setAnalysis(res.analysis || '');
-            } catch (e) {
-                console.error('Failed to fetch Athena insights', e);
-                setError('Failed to load insights.');
-            } finally {
-                setLoading(false);
-            }
-        };
-        loadInsights();
-    }, []);
-
-    return (
-        <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm mb-8">
-            <div className="flex items-center mb-4">
-                <Brain className="w-6 h-6 text-purple-600 mr-3" />
-                <h2 className="text-2xl font-bold text-gray-900">Athena's Insights</h2>
-            </div>
-            <div className="bg-gradient-to-r from-purple-50 to-blue-50 border border-purple-200 rounded-lg p-6">
-                {loading ? (
-                    <p className="text-gray-600">Loading insights...</p>
-                ) : error ? (
-                    <p className="text-red-600">{error}</p>
-                ) : (
-                    <p className="text-gray-700 text-lg leading-relaxed whitespace-pre-line">{analysis}</p>
-                )}
-                <div className="mt-4 text-sm text-gray-600">
-                    <p>• Analysis based on transactions from the past 3 months</p>
-                    <p>• Local AI first with ChatGPT fallback</p>
-                </div>
-            </div>
-        </div>
-    );
-};
 
 // --- Transactions Modal ---
 const TransactionsModal = ({
@@ -317,8 +224,10 @@ const Dashboard = () => {
 
                 // Load 12-month trend (months with no spending are filled with 0)
                 const fmtKey = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-                const trendStart = new Date(now.getFullYear(), now.getMonth() - 11, 1);
-                const trendResponse = await apiService.getExpensesByMonth(fmtKey(trendStart), fmtKey(now));
+                // Trend covers the 12 completed months; the current month is excluded since it is rarely imported yet.
+                const trendStart = new Date(now.getFullYear(), now.getMonth() - 12, 1);
+                const trendEnd = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+                const trendResponse = await apiService.getExpensesByMonth(fmtKey(trendStart), fmtKey(trendEnd));
                 if (trendResponse) {
                     const points: TrendPoint[] = [];
                     for (let i = 0; i < 12; i++) {
@@ -337,7 +246,7 @@ const Dashboard = () => {
 
                 // Raw transactions feed the largest-purchases and recurring-charges tiles
                 const fmtDay = (d: Date) => `${fmtKey(d)}-${String(d.getDate()).padStart(2, '0')}`;
-                const yearTxs = await apiService.getTransactionsByDateRange(fmtDay(trendStart), fmtDay(now));
+                const yearTxs = await apiService.getTransactionsByDateRange(fmtDay(new Date(now.getFullYear(), now.getMonth() - 11, 1)), fmtDay(now));
                 setYearTransactions(yearTxs);
                 setRecentTransactions(yearTxs.filter(t => t.date >= startDate));
             } catch (error) {
@@ -353,7 +262,7 @@ const Dashboard = () => {
     if (isLoading) {
         return (
             <div className="max-w-7xl mx-auto animate-fade-in">
-                <WelcomeHeader />
+                <DashboardBanner />
                 <div className="flex items-center justify-center h-64">
                     <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
                     <span className="ml-3 text-gray-600">Loading dashboard data...</span>
@@ -370,8 +279,8 @@ const Dashboard = () => {
 
     return (
         <div className="max-w-7xl mx-auto animate-fade-in">
-            <WelcomeHeader />
-            <AthenaSummary />
+            <DashboardBanner transactions={yearTransactions} />
+            <AthenaInsights />
 
             <TrendChartCard
                 title="Spending Trend (Past 12 Months)"
@@ -420,31 +329,36 @@ const Dashboard = () => {
 };
 
 const ViewTransactions = () => {
-    const [startDate, setStartDate] = useState<string>('');
-    const [endDate, setEndDate] = useState<string>('');
+    const [preset, setPreset] = useState<RangePreset>('ytd');
+    const [range, setRange] = useState<DateRange>(() => rangeForPreset('ytd'));
     const [transactions, setTransactions] = useState<TransactionDto[]>([]);
     const [isLoading, setIsLoading] = useState<boolean>(false);
     const [error, setError] = useState<string>('');
     const [sortConfig, setSortConfig] = useState<{ key: keyof TransactionDto; direction: "asc" | "desc" } | null>(null);
 
-    const handleFilter = async () => {
-        if (!startDate || !endDate) {
-            alert('Please select both start and end dates');
-            return;
-        }
+    // Load automatically on arrival and whenever a valid range is chosen
+    useEffect(() => {
+        if (!range.start || !range.end || range.start > range.end) return;
 
+        let cancelled = false;
         setIsLoading(true);
         setError('');
-        
-        try {
-            const data = await apiService.getTransactionsByDateRange(startDate, endDate);
-            setTransactions(data);
-        } catch (err) {
-            console.error('Error fetching transactions:', err);
-            setError('Failed to fetch transactions. Please try again.');
-        } finally {
-            setIsLoading(false);
-        }
+
+        apiService.getTransactionsByDateRange(range.start, range.end)
+            .then(data => { if (!cancelled) setTransactions(data); })
+            .catch(err => {
+                if (cancelled) return;
+                console.error('Error fetching transactions:', err);
+                setError('Failed to fetch transactions. Please try again.');
+            })
+            .finally(() => { if (!cancelled) setIsLoading(false); });
+
+        return () => { cancelled = true; };
+    }, [range.start, range.end]);
+
+    const handleRangeChange = (nextPreset: RangePreset, nextRange: DateRange) => {
+        setPreset(nextPreset);
+        setRange(nextRange);
     };
 
     const formatCurrency = (amount: number) => {
@@ -505,38 +419,7 @@ const ViewTransactions = () => {
             
             {/* Date Filter Section */}
             <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm mb-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Filter by Date Range</h3>
-                <div className="flex flex-col sm:flex-row gap-4 items-end">
-                    <div className="flex-1">
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Start Date</label>
-                        <input
-                            type="date"
-                            value={startDate}
-                            onChange={(e) => setStartDate(e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                        />
-                    </div>
-                    <div className="flex-1">
-                        <label className="block text-sm font-medium text-gray-700 mb-2">End Date</label>
-                        <input
-                            type="date"
-                            value={endDate}
-                            onChange={(e) => setEndDate(e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                        />
-                    </div>
-                    <button
-                        onClick={handleFilter}
-                        disabled={!startDate || !endDate || isLoading}
-                        className={`px-6 py-2 rounded-lg font-medium transition-colors duration-200 ${
-                            startDate && endDate && !isLoading
-                                ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-md'
-                                : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                        }`}
-                    >
-                        {isLoading ? 'Loading...' : 'Filter'}
-                    </button>
-                </div>
+                <DateRangePicker preset={preset} range={range} onChange={handleRangeChange} />
             </div>
 
             {/* Error Display */}
@@ -565,7 +448,7 @@ const ViewTransactions = () => {
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                         </svg>
                         <p className="text-lg font-medium">No transactions found</p>
-                        <p className="text-sm">Select a date range and click Filter to view transactions</p>
+                        <p className="text-sm">Try a wider date range</p>
                     </div>
                 ) : (
                     <div className="overflow-x-auto">
@@ -648,10 +531,9 @@ const SpendingInsights = () => {
     const [athenaQuery, setAthenaQuery] = useState<string>('');
     const [athenaResponse, setAthenaResponse] = useState<string>('');
     const [isAthenaLoading, setIsAthenaLoading] = useState<boolean>(false);
-    const [startDate, setStartDate] = useState<string>('');
-    const [endDate, setEndDate] = useState<string>('');
-    const [startMonth, setStartMonth] = useState<string>('');
-    const [endMonth, setEndMonth] = useState<string>('');
+    const [preset, setPreset] = useState<RangePreset>('ytd');
+    const [range, setRange] = useState<DateRange>(() => rangeForPreset('ytd'));
+    const [error, setError] = useState<string>('');
     const [chartData, setChartData] = useState<any>(null);
     const [detailsMap, setDetailsMap] = useState<Record<string, (TransactionDto | Transaction)[]> | null>(null);
     const [originalKeys, setOriginalKeys] = useState<string[] | null>(null);
@@ -696,13 +578,8 @@ const SpendingInsights = () => {
         }
     };
 
-    // Guards against a slow response from a previous option overwriting the current one
+    // Guards against a slow response from a previous option/range overwriting the current one
     const requestIdRef = useRef(0);
-
-    const lastDayOfMonth = (month: string) => {
-        const [y, m] = month.split('-').map(Number);
-        return `${month}-${String(new Date(y, m, 0).getDate()).padStart(2, '0')}`;
-    };
 
     const selectOption = (option: string) => {
         if (option === selectedOption) return;
@@ -711,115 +588,97 @@ const SpendingInsights = () => {
         setChartData(null);
         setDetailsMap(null);
         setOriginalKeys(null);
+        setError('');
         setIsLoading(false);
-
-        // Keep the date range and month range in sync, then reload for the new option
-        if (option === 'category' || option === 'merchant') {
-            let s = startDate;
-            let e = endDate;
-            if (!s && startMonth) s = `${startMonth}-01`;
-            if (!e && endMonth) e = lastDayOfMonth(endMonth);
-            if (s !== startDate) setStartDate(s);
-            if (e !== endDate) setEndDate(e);
-            if (s && e) handleDateRangeSubmit(option, s, e);
-        } else if (option === 'monthly') {
-            const s = startMonth || (startDate ? startDate.substring(0, 7) : '');
-            const e = endMonth || (endDate ? endDate.substring(0, 7) : '');
-            if (s !== startMonth) setStartMonth(s);
-            if (e !== endMonth) setEndMonth(e);
-            if (s && e) handleMonthlySubmit(s, e);
-        }
     };
 
-    const handleDateRangeSubmit = async (
-        option: string = selectedOption,
-        start: string = startDate,
-        end: string = endDate
-    ) => {
-        if (!start || !end) {
-            alert('Please select both start and end dates');
-            return;
-        }
+    const handleRangeChange = (nextPreset: RangePreset, nextRange: DateRange) => {
+        setPreset(nextPreset);
+        setRange(nextRange);
+    };
+
+    // Load automatically whenever the option or a valid range changes
+    useEffect(() => {
+        if (selectedOption !== 'category' && selectedOption !== 'merchant' && selectedOption !== 'monthly') return;
+        if (!range.start || !range.end || range.start > range.end) return;
 
         const requestId = ++requestIdRef.current;
         setIsLoading(true);
+        setError('');
 
-        try {
-            let data: TransactionSummary | undefined;
-            if (option === 'category') {
-                data = await apiService.getExpensesByCategory(start, end);
-                if (requestId !== requestIdRef.current) return;
-                if (data) {
-                    const chartData = {
-                        labels: Object.keys(data.totals),
-                        values: Object.values(data.totals).map(val => Number(val))
-                    };
-                    setChartData(chartData);
-                    setDetailsMap(data.details);
-                    setOriginalKeys(null);
+        const load = async () => {
+            try {
+                let data: TransactionSummary | undefined;
+                if (selectedOption === 'category') {
+                    data = await apiService.getExpensesByCategory(range.start, range.end);
+                } else if (selectedOption === 'merchant') {
+                    data = await apiService.getExpensesByEntityTop10(range.start, range.end);
+                } else {
+                    data = await apiService.getExpensesByMonth(range.start.substring(0, 7), range.end.substring(0, 7));
                 }
-            } else if (option === 'merchant') {
-                data = await apiService.getExpensesByEntityTop10(start, end);
                 if (requestId !== requestIdRef.current) return;
-                if (data) {
-                    const originalKeys = Object.keys(data.totals);
-                    const labels = originalKeys.map(key =>
-                        key.length > 20 ? key.substring(0, 10) + "…" : key
-                    );   
-                    const chartData = {
-                        labels,
-                        values: Object.values(data.totals).map(val => Number(val))
-                    };
-                    setChartData(chartData);
-                    setDetailsMap(data.details);
-                    setOriginalKeys(originalKeys);
-                }
-            }
+                if (!data) return;
 
-        } catch (error) {
-            if (requestId !== requestIdRef.current) return;
-            console.error('Error fetching data:', error);
-            alert('Failed to fetch data. Please try again.');
-        } finally {
-            if (requestId === requestIdRef.current) setIsLoading(false);
-        }
-    };
-
-    const handleMonthlySubmit = async (start: string = startMonth, end: string = endMonth) => {
-        if (!start || !end) {
-            alert('Please select both start and end months');
-            return;
-        }
-
-        const requestId = ++requestIdRef.current;
-        setIsLoading(true);
-
-        try {
-            const data = await apiService.getExpensesByMonth(start, end);
-            if (requestId !== requestIdRef.current) return;
-
-            if (data) {
                 const keys = Object.keys(data.totals);
-                const chartData = {
-                    labels: keys.map(month => {
-                        // Convert "2025-04" to "Apr 2025"
+                let labels = keys;
+                if (selectedOption === 'merchant') {
+                    labels = keys.map(key => key.length > 20 ? key.substring(0, 10) + "…" : key);
+                } else if (selectedOption === 'monthly') {
+                    // Convert "2025-04" to "Apr 2025"
+                    labels = keys.map(month => {
                         const [year, monthNum] = month.split('-');
-                        const date = new Date(parseInt(year), parseInt(monthNum) - 1);
-                        return date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
-                    }),
-                    values: Object.values(data.totals).map(val => Number(val))
-                };
-                setChartData(chartData);
+                        return new Date(parseInt(year), parseInt(monthNum) - 1)
+                            .toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+                    });
+                }
+                setChartData({ labels, values: Object.values(data.totals).map(val => Number(val)) });
                 setDetailsMap(data.details);
-                setOriginalKeys(keys);
+                setOriginalKeys(selectedOption === 'category' ? null : keys);
+            } catch (e) {
+                if (requestId !== requestIdRef.current) return;
+                console.error('Error fetching data:', e);
+                setError('Failed to fetch data. Please try again.');
+            } finally {
+                if (requestId === requestIdRef.current) setIsLoading(false);
             }
-        } catch (error) {
-            if (requestId !== requestIdRef.current) return;
-            console.error('Error fetching monthly data:', error);
-            alert('Failed to fetch monthly data. Please try again.');
-        } finally {
-            if (requestId === requestIdRef.current) setIsLoading(false);
-        }
+        };
+        load();
+    }, [selectedOption, range.start, range.end]);
+
+    const renderRangeCard = (
+        title: string,
+        onSliceClick: (label: string, index: number) => void
+    ) => {
+        const total: number = chartData ? chartData.values.reduce((a: number, b: number) => a + b, 0) : 0;
+        return (
+            <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
+                <div className="flex flex-wrap items-start justify-between gap-4 mb-5">
+                    <h3 className="text-lg font-semibold text-gray-900">{title}</h3>
+                    {chartData && (
+                        <div className="text-right">
+                            <p className="text-xs uppercase tracking-wide text-gray-500">Total</p>
+                            <p className="text-2xl font-bold text-gray-900">
+                                {total.toLocaleString('en-CA', { style: 'currency', currency: 'CAD' })}
+                            </p>
+                        </div>
+                    )}
+                </div>
+                <DateRangePicker preset={preset} range={range} onChange={handleRangeChange} />
+                {error && (
+                    <div className="mt-4 p-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700">{error}</div>
+                )}
+                <div className={`mt-6 transition-opacity duration-200 ${isLoading ? 'opacity-50' : 'opacity-100'}`}>
+                    {chartData ? (
+                        <DonutChartCard title={title} data={chartData} onSliceClick={onSliceClick} />
+                    ) : (
+                        isLoading && <div className="py-16 text-center text-gray-400">Loading…</div>
+                    )}
+                    {chartData && chartData.labels.length === 0 && !isLoading && (
+                        <div className="py-8 text-center text-gray-500">No spending in this period.</div>
+                    )}
+                </div>
+            </div>
+        );
     };
 
     const renderOptionContent = () => {
@@ -859,168 +718,30 @@ const SpendingInsights = () => {
                 );
 
             case 'category':
-                return (
-                    <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
-                        <h3 className="text-lg font-semibold text-gray-900 mb-4">Spending by Category</h3>
-                        <div className="space-y-4">
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-2">Start Date</label>
-                                    <input
-                                        type="date"
-                                        value={startDate}
-                                        onChange={(e) => setStartDate(e.target.value)}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-2">End Date</label>
-                                    <input
-                                        type="date"
-                                        value={endDate}
-                                        onChange={(e) => setEndDate(e.target.value)}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                    />
-                                </div>
-                            </div>
-                            <button
-                                onClick={() => handleDateRangeSubmit()}
-                                disabled={!startDate || !endDate || isLoading}
-                                className={`px-6 py-2 rounded-lg font-medium transition-colors duration-200 ${
-                                    startDate && endDate && !isLoading
-                                        ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-md'
-                                        : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                                }`}
-                            >
-                                {isLoading ? 'Loading...' : 'Submit'}
-                            </button>
-                            {chartData && (
-                                <div className="mt-6">
-                                    <DonutChartCard 
-                                        title="Spending by Category" 
-                                        data={chartData} 
-                                        onSliceClick={(label) => {
-                                            const txs = detailsMap?.[label] || [];
-                                            setModalTitle(`Transactions in ${label}`);
-                                            setModalTransactions(txs);
-                                            setModalOpen(true);
-                                        }}
-                                    />
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                );
+                return renderRangeCard('Spending by Category', (label) => {
+                    const txs = detailsMap?.[label] || [];
+                    setModalTitle(`Transactions in ${label}`);
+                    setModalTransactions(txs);
+                    setModalOpen(true);
+                });
 
             case 'merchant':
-                return (
-                    <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
-                        <h3 className="text-lg font-semibold text-gray-900 mb-4">Top Merchants</h3>
-                        <div className="space-y-4">
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-2">Start Date</label>
-                                    <input
-                                        type="date"
-                                        value={startDate}
-                                        onChange={(e) => setStartDate(e.target.value)}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-2">End Date</label>
-                                    <input
-                                        type="date"
-                                        value={endDate}
-                                        onChange={(e) => setEndDate(e.target.value)}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                    />
-                                </div>
-                            </div>
-                            <button
-                                onClick={() => handleDateRangeSubmit()}
-                                disabled={!startDate || !endDate || isLoading}
-                                className={`px-6 py-2 rounded-lg font-medium transition-colors duration-200 ${
-                                    startDate && endDate && !isLoading
-                                        ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-md'
-                                        : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                                }`}
-                            >
-                                {isLoading ? 'Loading...' : 'Submit'}
-                            </button>
-                            {chartData && (
-                                <div className="mt-6">
-                                    <DonutChartCard 
-                                        title="Top Merchants" 
-                                        data={chartData} 
-                                        onSliceClick={(_label, index) => {
-                                            const key = originalKeys?.[index] || '';
-                                            const txs = (key && detailsMap) ? (detailsMap[key] || []) : [];
-                                            setModalTitle(`Transactions in ${chartData.labels[index]}`);
-                                            setModalTransactions(txs);
-                                            setModalOpen(true);
-                                        }}
-                                    />
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                );
+                return renderRangeCard('Top Merchants', (_label, index) => {
+                    const key = originalKeys?.[index] || '';
+                    const txs = (key && detailsMap) ? (detailsMap[key] || []) : [];
+                    setModalTitle(`Transactions in ${chartData.labels[index]}`);
+                    setModalTransactions(txs);
+                    setModalOpen(true);
+                });
 
             case 'monthly':
-                return (
-                    <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
-                        <h3 className="text-lg font-semibold text-gray-900 mb-4">Spending by Month</h3>
-                        <div className="space-y-4">
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-2">Start Month</label>
-                                    <input
-                                        type="month"
-                                        value={startMonth}
-                                        onChange={(e) => setStartMonth(e.target.value)}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-2">End Month</label>
-                                    <input
-                                        type="month"
-                                        value={endMonth}
-                                        onChange={(e) => setEndMonth(e.target.value)}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                    />
-                                </div>
-                            </div>
-                            <button
-                                onClick={() => handleMonthlySubmit()}
-                                disabled={!startMonth || !endMonth || isLoading}
-                                className={`px-6 py-2 rounded-lg font-medium transition-colors duration-200 ${
-                                    startMonth && endMonth && !isLoading
-                                        ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-md'
-                                        : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                                }`}
-                            >
-                                {isLoading ? 'Loading...' : 'Submit'}
-                            </button>
-                            {chartData && (
-                                <div className="mt-6">
-                                    <DonutChartCard 
-                                        title="Monthly Spending" 
-                                        data={chartData} 
-                                        onSliceClick={(_label, index) => {
-                                            const key = originalKeys?.[index] || '';
-                                            const txs = (key && detailsMap) ? (detailsMap[key] || []) : [];
-                                            setModalTitle(`Transactions in ${chartData.labels[index]}`);
-                                            setModalTransactions(txs);
-                                            setModalOpen(true);
-                                        }}
-                                    />
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                );
+                return renderRangeCard('Spending by Month', (_label, index) => {
+                    const key = originalKeys?.[index] || '';
+                    const txs = (key && detailsMap) ? (detailsMap[key] || []) : [];
+                    setModalTitle(`Transactions in ${chartData.labels[index]}`);
+                    setModalTransactions(txs);
+                    setModalOpen(true);
+                });
 
             default:
                 return (

@@ -119,6 +119,7 @@ export interface Person {
 
 export interface AthenaInsightsResponse {
     analysis: string;
+    status?: 'online' | 'offline' | 'paused';
 }
 
 export interface AthenaChatResponse {
