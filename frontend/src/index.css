@@ -1,3 +1,7 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+@keyframes bulk-upload-slide {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(300%); }
+}

@@ -8,6 +8,7 @@ import type { TransactionDto, TransactionSummary, Transaction } from './services
 import CategorizationReview from './components/CategorizationReview';
 import MonthlyBalanceChecker from './components/MonthlyBalanceChecker';
 import AddTransaction from './components/AddTransaction';
+import BulkUpload from './components/BulkUpload';
 import { LargestTransactionsCard, RecurringChargesCard } from './components/SpendingBehaviourCards';
 
 // --- Type Definitions for TypeScript ---
@@ -414,161 +415,6 @@ const Dashboard = () => {
                 onClose={() => setModalOpen(false)}
                 transactions={modalTransactions}
             />
-        </div>
-    );
-};
-
-// Upload sources; sourceType must match the backend's ALLOWED_SOURCES
-const UPLOAD_SOURCES = [
-    { label: 'Amex', sourceType: 'amex' },
-    { label: 'CIBC', sourceType: 'cibc' },
-    { label: 'Asanka shared bills', sourceType: 'asanka-shared' },
-    { label: 'Divya shared bills', sourceType: 'divya-shared' },
-] as const;
-
-const AddBulkTransactions = () => {
-    const [selectedBank, setSelectedBank] = useState<string | null>(null);
-    const [selectedFile, setSelectedFile] = useState<File | null>(null);
-
-    // Console logging utility for component
-    const log = {
-        info: (message: string, data?: any) => {
-            console.log(`[AddBulkTransactions] ${message}`, data || '');
-        },
-        error: (message: string, error?: any) => {
-            console.error(`[AddBulkTransactions ERROR] ${message}`, error || '');
-        },
-        debug: (message: string, data?: any) => {
-            console.debug(`[AddBulkTransactions DEBUG] ${message}`, data || '');
-        }
-    };
-
-    const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-        const file = event.target.files?.[0];
-        if (file) {
-            log.info(`File selected: ${file.name} (${file.size} bytes, type: ${file.type})`);
-            log.debug('File details:', {
-                name: file.name,
-                size: file.size,
-                type: file.type,
-                lastModified: new Date(file.lastModified).toISOString()
-            });
-            setSelectedFile(file);
-        } else {
-            log.info('No file selected');
-        }
-    };
-
-    const handleAddTransactions = async () => {
-        log.info('Starting file upload process');
-        log.debug('Current state:', { selectedBank, selectedFile: selectedFile?.name });
-        
-        if (!selectedBank || !selectedFile) {
-            log.error('Missing required data for upload', { selectedBank, hasFile: !!selectedFile });
-            alert('Please select a bank and upload a file');
-            return;
-        }
-        
-        try {
-            const sourceType = UPLOAD_SOURCES.find(source => source.label === selectedBank)?.sourceType;
-            if (!sourceType) {
-                throw new Error(`Unknown source: ${selectedBank}`);
-            }
-            log.info(`Preparing to upload file with source type: ${sourceType}`);
-            
-            const result = await apiService.uploadTransactionFile(selectedFile, sourceType);
-            log.info('File upload successful:', result);
-            alert(result || `Successfully uploaded ${selectedFile.name} for ${selectedBank} transactions`);
-            
-            // Reset form
-            log.info('Resetting form after successful upload');
-            setSelectedBank(null);
-            setSelectedFile(null);
-        } catch (error) {
-            log.error('File upload failed:', error);
-            console.error('Error uploading file:', error);
-            alert('Failed to upload file. Please try again.');
-        }
-    };
-
-    return (
-        <div className="animate-fade-in max-w-2xl mx-auto">
-            <h2 className="text-3xl font-bold text-gray-900 mb-6">Upload Transactions File</h2>
-            
-            {/* Bank Selection */}
-            <div className="mb-6">
-                <label className="block text-sm font-medium text-gray-700 mb-3">Select Source</label>
-                <div className="flex flex-wrap gap-4">
-                    {UPLOAD_SOURCES.map(({ label }) => (
-                        <button
-                            key={label}
-                            onClick={() => {
-                                log.info(`Source selected: ${label}`);
-                                setSelectedBank(label);
-                            }}
-                            className={`px-6 py-3 rounded-lg font-medium transition-colors duration-200 ${
-                                selectedBank === label
-                                    ? 'bg-blue-600 text-white shadow-md'
-                                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                            }`}
-                        >
-                            {label}
-                        </button>
-                    ))}
-                </div>
-            </div>
-
-            {/* File Upload */}
-            <div className="mb-6">
-                <label className="block text-sm font-medium text-gray-700 mb-3">Upload File</label>
-                <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-gray-400 transition-colors duration-200">
-                    <input
-                        type="file"
-                        accept=".csv,.xlsx,.xls"
-                        onChange={handleFileChange}
-                        className="hidden"
-                        id="file-upload"
-                    />
-                    <label htmlFor="file-upload" className="cursor-pointer">
-                        <div className="space-y-2">
-                            <div className="text-gray-400">
-                                <svg className="mx-auto h-12 w-12" stroke="currentColor" fill="none" viewBox="0 0 48 48">
-                                    <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
-                                </svg>
-                            </div>
-                            <div className="text-gray-600">
-                                <span className="font-medium">Click to upload</span> or drag and drop
-                            </div>
-                            <div className="text-sm text-gray-500">CSV, XLSX, or XLS files</div>
-                        </div>
-                    </label>
-                </div>
-                {selectedFile && (
-                    <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-lg">
-                        <div className="flex items-center">
-                            <svg className="w-5 h-5 text-green-500 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                            </svg>
-                            <span className="text-green-700 font-medium">{selectedFile.name}</span>
-                        </div>
-                    </div>
-                )}
-            </div>
-
-            {/* Add Transactions Button */}
-            <div className="flex justify-center">
-                <button
-                    onClick={handleAddTransactions}
-                    disabled={!selectedBank || !selectedFile}
-                    className={`px-8 py-3 rounded-lg font-medium transition-colors duration-200 ${
-                        selectedBank && selectedFile
-                            ? 'bg-green-600 text-white hover:bg-green-700 shadow-md'
-                            : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                    }`}
-                >
-                    Add Transactions
-                </button>
-            </div>
         </div>
     );
 };
@@ -1342,7 +1188,7 @@ const App: React.FC = () => {
             case 'Dashboard':
                 return <Dashboard />;
             case 'AddBulkTransactions':
-                return <AddBulkTransactions />;
+                return <BulkUpload />;
             case 'AddTransaction':
                 return <AddTransaction />;
             case 'ViewTransactions':
