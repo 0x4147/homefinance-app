@@ -30,6 +30,12 @@ public class BatchConfig {
 
     private static final Logger logger = LoggerFactory.getLogger(BatchConfig.class);
 
+    /**
+     * An upload is all-or-nothing: the whole file is one chunk, hence one transaction, so a bad row
+     * (unknown category, bad date) leaves nothing imported. Files are personal bank/bill exports, far below this.
+     */
+    static final int IMPORT_COMMIT_INTERVAL = 100_000;
+
     private final TransactionWriter writer;
     private final TransactionRepository transactionRepository;
     private final CIBCTransactionFieldMapper cibcTransactionFieldMapper;
@@ -63,7 +69,7 @@ public class BatchConfig {
                                        PlatformTransactionManager transactionManager) {
         logger.info("Creating import transactions step");
         return new StepBuilder("importTransactions", jobRepository)
-                .<Transaction, Transaction>chunk(10, transactionManager)
+                .<Transaction, Transaction>chunk(IMPORT_COMMIT_INTERVAL, transactionManager)
                 .reader(csvFileReader(null, null)) // Let Spring inject the value
                 .processor(duplicateTransactionFilter())
                 .writer(writer)

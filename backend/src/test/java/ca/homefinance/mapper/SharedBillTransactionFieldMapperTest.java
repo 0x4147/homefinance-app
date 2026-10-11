@@ -26,6 +26,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -108,17 +109,15 @@ class SharedBillTransactionFieldMapperTest {
     }
 
     @Test
-    void mapFieldSet_UnknownCategory_ShouldFallBackToCategorizer() {
+    void mapFieldSet_UnknownCategory_ShouldFailInsteadOfGuessing() {
         when(personRepository.findByCode("ASANKA")).thenReturn(Optional.of(asanka));
         when(categoryRepository.findByName("Nope")).thenReturn(null);
-        Category fallback = new Category();
-        fallback.setCategoryId(2);
-        when(categorizationService.categorizeTransaction(any(), any(), any(), any())).thenReturn(fallback);
 
-        Transaction result = mapper.mapFieldSet(
-                fieldSet("04/12/2023", "Rogers", "89.99", "", "Nope"), "ASANKA");
+        RuntimeException e = assertThrows(RuntimeException.class, () -> mapper.mapFieldSet(
+                fieldSet("04/12/2023", "Rogers", "89.99", "", "Nope"), "ASANKA"));
 
-        assertSame(fallback, result.getCategory());
+        assertTrue(e.getCause().getMessage().contains("Unknown category 'Nope'"));
+        verifyNoInteractions(categorizationService);
     }
 
     @Test

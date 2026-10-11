@@ -22,7 +22,8 @@ import java.time.format.DateTimeFormatter;
  * a personal account and that are split 50/50 in the monthly balance. The paying account (and so the person)
  * depends on the source, hence {@link #forAccount} rather than a single {@link FieldSetMapper}.
  * <p>
- * {@code details} and {@code category} are optional; a blank category falls back to the categorizer.
+ * {@code details} and {@code category} are optional; a blank category falls back to the categorizer, but a
+ * category that is given and doesn't exist fails the row.
  * <p>
  * The file's amounts are unsigned: the direction comes from the category. An income category (e.g. Rental Bill
  * Income) is money in, anything else is money out. A negative amount in the file reverses that, e.g. a
@@ -73,8 +74,9 @@ public class SharedBillTransactionFieldMapper {
             if (categoryName != null) {
                 category = categoryRepository.findByName(categoryName);
                 if (category == null) {
-                    logger.warn("Unknown category '{}' for '{}'; falling back to the categorizer",
-                            categoryName, transaction.getEntity());
+                    // An explicit category that doesn't exist is a data error, not a hint: don't guess.
+                    throw new IllegalArgumentException("Unknown category '" + categoryName + "' for '"
+                            + transaction.getEntity() + "' on " + transaction.getDate());
                 }
             }
             if (category == null) {
