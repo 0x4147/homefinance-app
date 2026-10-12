@@ -107,6 +107,13 @@ class SeedRuleCoverageTest {
         expected.put("DRSHAMBLY DENT PROF CO ANCASTER, ON", "Healthcare");
         expected.put("PETSMART INC. 0919      ANCASTER", "Shopping");
         expected.put("PELLER EST WINERY REST NIAGARA ON-LK, ON", "Take Out");
+        expected.put("COSTCO GAS W1234        HAMILTON", "Gas");
+        expected.put("COSTCO WHOLESALE W1234  HAMILTON", "Groceries");
+        expected.put("PETRO-CANADA 12345      ANCASTER", "Gas");
+        expected.put("PETRO CANADA            HAMILTON", "Gas");
+        expected.put("ESSO 7891234            HAMILTON", "Gas");
+        expected.put("SHELL C12345            ANCASTER", "Gas");
+        expected.put("ENBRIDGE GAS INC.       TORONTO", "Utility Bill");
         expected.put("NETFLIX.COM", "Entertainment");
         expected.put("FRESH MANNA SUPERMARKE Hamilton, ON", "Groceries");
         expected.put("TIM HORTONS #1234 HAMILTON, ON", "Take Out");

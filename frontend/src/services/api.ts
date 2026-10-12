@@ -28,6 +28,7 @@ export interface Transaction {
 }
 
 export interface TransactionDto {
+    transactionId?: number;
     amount: number;
     date: string;
     entity: string;
@@ -109,6 +110,17 @@ export interface Category {
     kind: string;
     inBalance: boolean;
     description?: string;
+}
+
+/** Result of correcting a category; send it back unchanged to undo. */
+export interface CategoryCorrection {
+    updated: number;
+    merchant: string;
+    category: string;
+    ruleKey: string;
+    previousRuleCategoryId: number | null;
+    previousRuleSource: string | null;
+    changes: { transactionId: number; previousCategoryId: number | null }[];
 }
 
 export interface Person {
@@ -326,6 +338,23 @@ class ApiService {
     async getAllCategories(): Promise<Category[]> {
         log.info('Fetching all categories');
         return this.makeRequest<Category[]>('/categorization/categories');
+    }
+
+    /** Sets a transaction's category and applies it to all transactions of the same merchant, now and later. */
+    async correctCategory(transactionId: number, category: string): Promise<CategoryCorrection> {
+        log.info(`Correcting transaction ${transactionId} to category ${category}`);
+        return this.makeRequest<CategoryCorrection>('/categorization/correct', {
+            method: 'POST',
+            body: JSON.stringify({ transactionId, category }),
+        });
+    }
+
+    async undoCorrection(correction: CategoryCorrection): Promise<void> {
+        log.info(`Undoing correction for ${correction.ruleKey}`);
+        await this.makeRequest<unknown>('/categorization/correct/undo', {
+            method: 'POST',
+            body: JSON.stringify(correction),
+        });
     }
 
     async reviewUncategorizedTransaction(uncategorizedId: number, assignedCategory: string): Promise<string> {

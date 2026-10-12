@@ -12,6 +12,7 @@ import java.time.LocalDate;
 @NoArgsConstructor
 public class TransactionDto {
 
+    private Integer transactionId;
     private BigDecimal amount;
     private LocalDate date;
     private String entity;

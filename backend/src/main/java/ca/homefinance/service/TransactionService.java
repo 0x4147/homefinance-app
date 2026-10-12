@@ -260,6 +260,7 @@ public class TransactionService {
 
     private TransactionDto toDto(Transaction tx) {
         return new TransactionDto(
+                tx.getTransactionId(),
                 tx.getAmount(),
                 tx.getDate(),
                 tx.getEntity(),

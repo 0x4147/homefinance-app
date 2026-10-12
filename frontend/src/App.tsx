@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { LayoutDashboard, PlusSquare, FilePlus, List, BarChart2, Calendar, Receipt, Brain, Tag } from 'lucide-react';
 import { DonutChartCard } from './components/Charts';
 import { TrendChartCard } from './components/TrendChart';
@@ -14,6 +14,8 @@ import { AthenaInsights } from './components/AthenaInsights';
 import { DateRangePicker } from './components/DateRangePicker';
 import { rangeForPreset } from './utils/dateRange';
 import type { RangePreset, DateRange } from './utils/dateRange';
+import { CategoryCell, CorrectionToast } from './components/CategoryCell';
+import { useCategoryCorrection } from './components/useCategoryCorrection';
 import { LargestTransactionsCard, RecurringChargesCard } from './components/SpendingBehaviourCards';
 
 // --- Type Definitions for TypeScript ---
@@ -33,16 +35,17 @@ const TransactionsModal = ({
     title,
     open,
     onClose,
-    transactions
+    transactions,
+    onCategoryChanged
 }: {
     title: string;
     open: boolean;
     onClose: () => void;
     transactions: (TransactionDto | Transaction)[];
+    onCategoryChanged?: () => void;
 }) => {
-    if (!open) return null;
-
     const [sortConfig, setSortConfig] = useState<{ key: keyof TransactionDto; direction: "asc" | "desc" } | null>(null);
+    const correction = useCategoryCorrection(onCategoryChanged);
 
     const formatCurrency = (amount: number) => {
         return new Intl.NumberFormat('en-CA', {
@@ -96,6 +99,8 @@ const TransactionsModal = ({
         return sortConfig.direction === "asc" ? "▲" : "▼";
     };
 
+    if (!open) return null;
+
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
             <div className="w-full max-w-3xl bg-white rounded-xl shadow-xl">
@@ -128,14 +133,22 @@ const TransactionsModal = ({
                                             const account = tx.account || tx.sourceAccount || '';
                                             const dateStr = typeof tx.date === 'string' ? tx.date : (tx.date?.toString?.() || '');
                                             return (
-                                                <tr key={idx} className="hover:bg-gray-50">
+                                                <tr key={tx.transactionId ?? idx} className="hover:bg-gray-50">
                                                     <td className="px-6 py-3 whitespace-nowrap text-sm text-gray-900">{formatDate(dateStr)}</td>
                                                     <td className="px-6 py-3 whitespace-nowrap text-sm text-gray-900">{entity}</td>
                                                     <td className={`px-6 py-3 whitespace-nowrap text-sm font-medium ${amountNum >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                                                         {amountNum >= 0 ? '+' : '-'}{formatCurrency(amountNum)}
                                                     </td>
                                                     <td className="px-6 py-3 whitespace-nowrap text-sm text-gray-900">{account}</td>
-                                                    <td className="px-6 py-3 whitespace-nowrap text-sm text-gray-900">{category}</td>
+                                                    <td className="px-6 py-3 whitespace-nowrap text-sm text-gray-900">
+                                                        <CategoryCell
+                                                            transactionId={tx.transactionId}
+                                                            entity={entity}
+                                                            category={correction.categoryOf(tx.transactionId, category)}
+                                                            categories={correction.categories}
+                                                            onSelect={(name) => correction.correct(tx.transactionId, name)}
+                                                        />
+                                                    </td>
                                                 </tr>
                                             );
                                         })}
@@ -149,6 +162,7 @@ const TransactionsModal = ({
                     <button onClick={onClose} className="px-4 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50">Close</button>
                 </div>
             </div>
+            <CorrectionToast state={correction} />
         </div>
     );
 };
@@ -166,7 +180,9 @@ const Dashboard = () => {
     const [modalOpen, setModalOpen] = useState(false);
     const [modalTitle, setModalTitle] = useState('');
     const [modalTransactions, setModalTransactions] = useState<(TransactionDto | Transaction)[]>([]);
-
+    // Bumped after a category correction so the charts behind the modal refresh
+    const [reloadKey, setReloadKey] = useState(0);
+    const reloadDashboard = useCallback(() => setReloadKey(k => k + 1), []);
 
     useEffect(() => {
         const loadDashboardData = async () => {
@@ -257,7 +273,7 @@ const Dashboard = () => {
         };
 
         loadDashboardData();
-    }, []);
+    }, [reloadKey]);
 
     if (isLoading) {
         return (
@@ -323,6 +339,7 @@ const Dashboard = () => {
                 open={modalOpen}
                 onClose={() => setModalOpen(false)}
                 transactions={modalTransactions}
+                onCategoryChanged={reloadDashboard}
             />
         </div>
     );
@@ -335,6 +352,7 @@ const ViewTransactions = () => {
     const [isLoading, setIsLoading] = useState<boolean>(false);
     const [error, setError] = useState<string>('');
     const [sortConfig, setSortConfig] = useState<{ key: keyof TransactionDto; direction: "asc" | "desc" } | null>(null);
+    const correction = useCategoryCorrection();
 
     // Load automatically on arrival and whenever a valid range is chosen
     useEffect(() => {
@@ -487,7 +505,7 @@ const ViewTransactions = () => {
                                     </tr>
                                 ) : (
                                     sortedTransactions.map((transaction, index) => (
-                                        <tr key={index} className="hover:bg-gray-50">
+                                        <tr key={transaction.transactionId ?? index} className="hover:bg-gray-50">
                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                                                 {formatDate(transaction.date)}
                                             </td>
@@ -512,7 +530,13 @@ const ViewTransactions = () => {
                                                 {transaction.account}
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                                {transaction.category}
+                                                <CategoryCell
+                                                    transactionId={transaction.transactionId}
+                                                    entity={transaction.entity}
+                                                    category={correction.categoryOf(transaction.transactionId, transaction.category ?? '')}
+                                                    categories={correction.categories}
+                                                    onSelect={(name) => correction.correct(transaction.transactionId!, name)}
+                                                />
                                             </td>
                                         </tr>
                                     ))
@@ -522,6 +546,7 @@ const ViewTransactions = () => {
                     </div>
                 )}
             </div>
+            <CorrectionToast state={correction} />
         </div>
     );
 };
@@ -541,6 +566,9 @@ const SpendingInsights = () => {
     const [modalTitle, setModalTitle] = useState('');
     const [modalTransactions, setModalTransactions] = useState<(TransactionDto | Transaction)[]>([]);
     const [isLoading, setIsLoading] = useState<boolean>(false);
+    // Bumped after a category correction so the charts behind the modal refresh
+    const [reloadKey, setReloadKey] = useState(0);
+    const reloadInsights = useCallback(() => setReloadKey(k => k + 1), []);
 
 
     // Sample data for different chart types
@@ -643,7 +671,7 @@ const SpendingInsights = () => {
             }
         };
         load();
-    }, [selectedOption, range.start, range.end]);
+    }, [selectedOption, range.start, range.end, reloadKey]);
 
     const renderRangeCard = (
         title: string,
@@ -828,6 +856,7 @@ const SpendingInsights = () => {
                 open={modalOpen}
                 onClose={() => setModalOpen(false)}
                 transactions={modalTransactions}
+                onCategoryChanged={reloadInsights}
             />
         </div>
     );

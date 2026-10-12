@@ -67,7 +67,7 @@ class TransactionControllerTest {
 
     @Test
     void saveTransaction_ShouldDelegateToService() throws Exception {
-        TransactionDto dto = new TransactionDto(new BigDecimal("10.00"), LocalDate.of(2024, 1, 1),
+        TransactionDto dto = new TransactionDto(null, new BigDecimal("10.00"), LocalDate.of(2024, 1, 1),
                 "Entity", "Details", "ASANKA", "EXPENSE", "1", "1");
         Transaction saved = new Transaction();
         saved.setTransactionId(1);

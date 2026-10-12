@@ -1,5 +1,6 @@
 package ca.homefinance.service;
 
+import ca.homefinance.dto.CategoryCorrection;
 import ca.homefinance.dto.ReviewGroup;
 import ca.homefinance.entity.Category;
 import ca.homefinance.entity.MerchantRule;
@@ -121,6 +122,94 @@ public class TransactionCategorizationService {
         return resolved;
     }
 
+    /**
+     * Fixes one transaction's category and applies the same fix to every existing transaction of that
+     * merchant, and (via a user rule) to future imports. Transactions covered by a more specific user rule
+     * are left alone.
+     */
+    @Transactional
+    public CategoryCorrection correctCategory(Integer transactionId, String categoryName) {
+        Transaction target = transactionRepository.findById(transactionId)
+                .orElseThrow(() -> new RuntimeException("Transaction not found"));
+        Category category = requireCategory(categoryName);
+        String key = brandKey(target.getEntity());
+        if (key.isBlank()) {
+            throw new IllegalArgumentException("Cannot correct blank merchant: " + target.getEntity());
+        }
+
+        Optional<MerchantRule> existing = merchantRuleRepository.findByNormalizedMerchant(key);
+        Integer previousRuleCategoryId = existing.map(rule -> rule.getCategory().getCategoryId()).orElse(null);
+        String previousRuleSource = existing.map(rule -> rule.getSource().name()).orElse(null);
+
+        List<Transaction> all = transactionRepository.findAll();
+        Map<Integer, Integer> categoryBefore = new HashMap<>();
+        for (Transaction transaction : all) {
+            categoryBefore.put(transaction.getTransactionId(), categoryIdOf(transaction));
+        }
+
+        learnFromUserCorrection(target.getEntity(), categoryName);
+
+        List<MerchantRule> rules = rules();
+        for (Transaction transaction : all) {
+            if (!transaction.getTransactionId().equals(transactionId)) {
+                MerchantRule best = findBestRule(searchKey(transaction.getEntity(), null), rules);
+                if (best == null || !key.equals(best.getNormalizedMerchant())) {
+                    continue;
+                }
+            }
+            if (!Objects.equals(categoryIdOf(transaction), category.getCategoryId())) {
+                transaction.setCategory(category);
+                transactionRepository.save(transaction);
+            }
+        }
+
+        List<CategoryCorrection.Change> changes = new ArrayList<>();
+        for (Transaction transaction : all) {
+            Integer before = categoryBefore.get(transaction.getTransactionId());
+            if (!Objects.equals(before, categoryIdOf(transaction))) {
+                changes.add(new CategoryCorrection.Change(transaction.getTransactionId(), before));
+            }
+        }
+        log.info("Corrected '{}' -> {} ({} transactions updated)", key, category.getName(), changes.size());
+        return new CategoryCorrection(changes.size(), target.getEntity(), category.getName(), key,
+                previousRuleCategoryId, previousRuleSource, changes);
+    }
+
+    /** Reverts a {@link #correctCategory} result: transaction categories and the user rule. */
+    @Transactional
+    public void undoCorrection(CategoryCorrection correction) {
+        for (CategoryCorrection.Change change : correction.changes()) {
+            transactionRepository.findById(change.transactionId()).ifPresent(transaction -> {
+                Category previous = change.previousCategoryId() == null ? null
+                        : categoryRepository.findById(change.previousCategoryId()).orElse(null);
+                transaction.setCategory(previous);
+                UncategorizedTransaction pending = transaction.getUncategorizedTransaction();
+                if (previous == null && pending != null) {
+                    pending.setReviewed(false);
+                    pending.setAssignedCategory(null);
+                    pending.setReviewedAt(null);
+                    uncategorizedTransactionRepository.save(pending);
+                }
+                transactionRepository.save(transaction);
+            });
+        }
+
+        merchantRuleRepository.findByNormalizedMerchant(correction.ruleKey()).ifPresent(rule -> {
+            if (correction.previousRuleSource() == null) {
+                merchantRuleRepository.delete(rule);
+            } else {
+                categoryRepository.findById(correction.previousRuleCategoryId()).ifPresent(rule::setCategory);
+                rule.setSource(Source.valueOf(correction.previousRuleSource()));
+                merchantRuleRepository.save(rule);
+            }
+        });
+        cachedRules = null;
+    }
+
+    private static Integer categoryIdOf(Transaction transaction) {
+        return transaction.getCategory() == null ? null : transaction.getCategory().getCategoryId();
+    }
+
     public List<String> getSuggestedCategories(String merchant, String details) {
         return suggest(searchKey(merchant, details), rules()).stream()
                 .map(SuggestedCategory::name)
@@ -177,13 +266,23 @@ public class TransactionCategorizationService {
         for (MerchantRule rule : rules) {
             int specificity = matchSpecificity(key, rule.getNormalizedMerchant());
             if (specificity == 0) continue;
-            if (best == null || specificity > bestSpecificity
-                    || (specificity == bestSpecificity && priority(rule) > priority(best))) {
+            if (best == null || beats(rule, specificity, best, bestSpecificity)) {
                 best = rule;
                 bestSpecificity = specificity;
             }
         }
         return best;
+    }
+
+    /** A user's own rule always outranks generated ones; otherwise the more specific rule wins. */
+    private static boolean beats(MerchantRule rule, int specificity, MerchantRule best, int bestSpecificity) {
+        boolean ruleIsUser = rule.getSource() == Source.USER;
+        boolean bestIsUser = best.getSource() == Source.USER;
+        if (ruleIsUser != bestIsUser) {
+            return ruleIsUser;
+        }
+        return specificity > bestSpecificity
+                || (specificity == bestSpecificity && priority(rule) > priority(best));
     }
 
     private static int priority(MerchantRule rule) {

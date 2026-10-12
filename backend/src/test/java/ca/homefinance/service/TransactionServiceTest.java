@@ -371,7 +371,7 @@ class TransactionServiceTest {
     }
 
     private static TransactionDto dto(String amount, String entity, String account, String type, String category, String person) {
-        return new TransactionDto(new BigDecimal(amount), LocalDate.of(2024, 2, 1), entity, null,
+        return new TransactionDto(null, new BigDecimal(amount), LocalDate.of(2024, 2, 1), entity, null,
                 account, type, category, person);
     }
 

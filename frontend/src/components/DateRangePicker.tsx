@@ -1,5 +1,5 @@
 import React from 'react';
-import { PRESETS, rangeForPreset } from '../utils/dateRange';
+import { PRESETS, rangeForPreset, yearPresets } from '../utils/dateRange';
 import type { RangePreset, DateRange } from '../utils/dateRange';
 
 const formatDay = (iso: string) => {
@@ -21,7 +21,7 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({ preset, range,
     return (
         <div className="space-y-3">
             <div className="flex flex-wrap items-center gap-2">
-                {PRESETS.map(p => (
+                {[...PRESETS, ...yearPresets()].map(p => (
                     <button
                         key={p.id}
                         type="button"

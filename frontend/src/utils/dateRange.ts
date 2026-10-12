@@ -1,4 +1,5 @@
-export type RangePreset = 'ytd' | 'thisMonth' | 'lastMonth' | '3m' | '6m' | '12m' | 'custom';
+export type YearPreset = `year-${number}`;
+export type RangePreset = 'ytd' | 'thisMonth' | 'lastMonth' | '3m' | '6m' | '12m' | YearPreset | 'custom';
 
 export interface DateRange {
     start: string; // YYYY-MM-DD
@@ -19,9 +20,20 @@ export const PRESETS: { id: Exclude<RangePreset, 'custom'>; label: string }[] = 
     { id: '12m', label: 'Last 12 months' },
 ];
 
+// One preset per full calendar year for the previous 5 years, most recent first
+export const yearPresets = (today = new Date()): { id: YearPreset; label: string }[] =>
+    Array.from({ length: 5 }, (_, i) => {
+        const year = today.getFullYear() - 1 - i;
+        return { id: `year-${year}` as YearPreset, label: String(year) };
+    });
+
 export const rangeForPreset = (preset: Exclude<RangePreset, 'custom'>, today = new Date()): DateRange => {
     const y = today.getFullYear();
     const m = today.getMonth();
+    if (preset.startsWith('year-')) {
+        const year = Number(preset.slice(5));
+        return { start: toIsoDate(new Date(year, 0, 1)), end: toIsoDate(new Date(year, 11, 31)) };
+    }
     switch (preset) {
         case 'ytd':
             return { start: toIsoDate(new Date(y, 0, 1)), end: toIsoDate(today) };
@@ -35,5 +47,7 @@ export const rangeForPreset = (preset: Exclude<RangePreset, 'custom'>, today = n
             return { start: toIsoDate(new Date(y, m - 5, 1)), end: toIsoDate(today) };
         case '12m':
             return { start: toIsoDate(new Date(y, m - 11, 1)), end: toIsoDate(today) };
+        default:
+            return { start: toIsoDate(new Date(y, 0, 1)), end: toIsoDate(today) };
     }
 };

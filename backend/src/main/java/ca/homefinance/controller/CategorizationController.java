@@ -1,5 +1,7 @@
 package ca.homefinance.controller;
 
+import ca.homefinance.dto.CategoryCorrection;
+import ca.homefinance.dto.CorrectCategoryRequest;
 import ca.homefinance.dto.ReviewGroup;
 import ca.homefinance.entity.Category;
 import ca.homefinance.entity.Transaction;
@@ -107,6 +109,24 @@ public class CategorizationController {
         categorizationService.updateTransactionCategory(transactionId, newCategory);
         
         return new ResponseEntity<>("Transaction category updated and learning applied", HttpStatus.OK);
+    }
+
+    /**
+     * Correct a transaction's category and apply it to every transaction of the same merchant,
+     * now and on future imports
+     */
+    @PostMapping("/correct")
+    public ResponseEntity<CategoryCorrection> correctCategory(@RequestBody CorrectCategoryRequest request) {
+        return ResponseEntity.ok(categorizationService.correctCategory(request.transactionId(), request.category()));
+    }
+
+    /**
+     * Undo a correction using the result returned by {@code /correct}
+     */
+    @PostMapping("/correct/undo")
+    public ResponseEntity<Void> undoCorrection(@RequestBody CategoryCorrection correction) {
+        categorizationService.undoCorrection(correction);
+        return ResponseEntity.noContent().build();
     }
 
     /**

@@ -1,5 +1,6 @@
 package ca.homefinance.service;
 
+import ca.homefinance.dto.CategoryCorrection;
 import ca.homefinance.entity.Category;
 import ca.homefinance.entity.MerchantRule;
 import ca.homefinance.entity.MerchantRule.Source;
@@ -118,6 +119,74 @@ class TransactionCategorizationServiceTest {
         assertEquals("Take Out", pending.getAssignedCategory());
         assertSame(takeOut, linked.getCategory());
         verify(transactionRepository).save(linked);
+    }
+
+    @Test
+    void categorize_UserRuleBeatsLongerSeedRule() {
+        Category groceries = category(4, "Groceries");
+        Category gas = category(5, "Gas");
+        MerchantRule userRule = rule("costco", groceries);
+        userRule.setSource(Source.USER);
+        when(merchantRuleRepository.findAll()).thenReturn(List.of(userRule, rule("costco gas", gas)));
+
+        Category result = service.categorizeTransaction("COSTCO GAS W123 TORONTO, ON", null,
+                BigDecimal.TEN, LocalDate.of(2024, 1, 3));
+
+        assertEquals("Groceries", result.getName());
+    }
+
+    @Test
+    void correctCategory_UpdatesAllTransactionsOfMerchantAndReportsPreviousCategories() {
+        Category groceries = category(4, "Groceries");
+        Transaction clicked = transaction(1, "NEW CAFE #77 OTTAWA, ON", takeOut);
+        Transaction sameMerchant = transaction(2, "NEW CAFE #12 TORONTO, ON", takeOut);
+        Transaction other = transaction(3, "SOMEWHERE ELSE", takeOut);
+        when(transactionRepository.findById(1)).thenReturn(java.util.Optional.of(clicked));
+        when(transactionRepository.findAll()).thenReturn(List.of(clicked, sameMerchant, other));
+        when(categoryRepository.findByName("Groceries")).thenReturn(groceries);
+        when(merchantRuleRepository.findByNormalizedMerchant("new cafe")).thenReturn(java.util.Optional.empty());
+        when(uncategorizedTransactionRepository.findByReviewedFalseOrderByCreatedAtDesc()).thenReturn(List.of());
+        when(merchantRuleRepository.findAll()).thenAnswer(invocation -> {
+            MerchantRule saved = new MerchantRule();
+            saved.setNormalizedMerchant("new cafe");
+            saved.setCategory(groceries);
+            saved.setSource(Source.USER);
+            return List.of(saved);
+        });
+
+        CategoryCorrection result = service.correctCategory(1, "Groceries");
+
+        assertSame(groceries, clicked.getCategory());
+        assertSame(groceries, sameMerchant.getCategory());
+        assertSame(takeOut, other.getCategory());
+        assertEquals(2, result.updated());
+        assertEquals("new cafe", result.ruleKey());
+        assertNull(result.previousRuleSource());
+        assertTrue(result.changes().contains(new CategoryCorrection.Change(2, 1)));
+    }
+
+    @Test
+    void undoCorrection_RestoresCategoriesAndDeletesNewRule() {
+        Transaction changed = transaction(2, "NEW CAFE #12 TORONTO, ON", category(4, "Groceries"));
+        when(transactionRepository.findById(2)).thenReturn(java.util.Optional.of(changed));
+        when(categoryRepository.findById(1)).thenReturn(java.util.Optional.of(takeOut));
+        MerchantRule created = rule("new cafe", category(4, "Groceries"));
+        created.setSource(Source.USER);
+        when(merchantRuleRepository.findByNormalizedMerchant("new cafe")).thenReturn(java.util.Optional.of(created));
+
+        service.undoCorrection(new CategoryCorrection(1, "NEW CAFE", "Groceries", "new cafe", null, null,
+                List.of(new CategoryCorrection.Change(2, 1))));
+
+        assertSame(takeOut, changed.getCategory());
+        verify(merchantRuleRepository).delete(created);
+    }
+
+    private static Transaction transaction(int id, String entity, Category category) {
+        Transaction transaction = new Transaction();
+        transaction.setTransactionId(id);
+        transaction.setEntity(entity);
+        transaction.setCategory(category);
+        return transaction;
     }
 
     private static Category category(int id, String name) {

@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { AlertTriangle, CheckCircle2, CircleDollarSign, Loader2, Pencil, Scale, Undo2, X } from 'lucide-react';
 import { apiService } from '../services/api';
+import { CategoryCell, CorrectionToast } from './CategoryCell';
+import { useCategoryCorrection } from './useCategoryCorrection';
 import type { BalanceLine, MonthlyBalanceResponseDto, SettlementStatus } from '../services/api';
 
 type Person = 'ASANKA' | 'DIVYA';
@@ -86,12 +88,19 @@ const StatusBadge = ({ status }: { status: SettlementStatus }) => {
     );
 };
 
-const TransactionsDrawer = ({ month, year, person, total, onClose }: {
-    month: number; year: number; person: Person; total: number; onClose: () => void;
+const TransactionsDrawer = ({ month, year, person, total, onClose, onCategoryChanged }: {
+    month: number; year: number; person: Person; total: number; onClose: () => void; onCategoryChanged: () => void;
 }) => {
     const ref = useDialog(onClose);
     const [lines, setLines] = useState<BalanceLine[] | null>(null);
     const [error, setError] = useState<string | null>(null);
+    // A new category can move a transaction in or out of the balance, so reload the list after each change
+    const [reloadKey, setReloadKey] = useState(0);
+    const handleCategoryChanged = useCallback(() => {
+        setReloadKey(k => k + 1);
+        onCategoryChanged();
+    }, [onCategoryChanged]);
+    const correction = useCategoryCorrection(handleCategoryChanged);
 
     useEffect(() => {
         let cancelled = false;
@@ -99,7 +108,7 @@ const TransactionsDrawer = ({ month, year, person, total, onClose }: {
             .then(result => { if (!cancelled) setLines(result); })
             .catch(e => { if (!cancelled) setError(errorMessage(e)); });
         return () => { cancelled = true; };
-    }, [month, year, person]);
+    }, [month, year, person, reloadKey]);
 
     const title = `${person === 'ASANKA' ? 'Asanka' : 'Divya'} paid · ${MONTH_NAMES[month - 1]} ${year}`;
 
@@ -132,11 +141,19 @@ const TransactionsDrawer = ({ month, year, person, total, onClose }: {
                     {lines && lines.length > 0 && (
                         <ul className="divide-y divide-gray-100">
                             {lines.map((line, i) => (
-                                <li key={i} className="flex items-start justify-between gap-4 py-3">
+                                <li key={line.transaction.transactionId ?? i} className="flex items-start justify-between gap-4 py-3">
                                     <div className="min-w-0">
                                         <p className="truncate font-medium text-gray-900">{line.transaction.entity}</p>
-                                        <p className="text-xs text-gray-500">
-                                            {line.transaction.date} · {KIND_LABELS[line.kind] ?? line.kind} · {line.transaction.category} · {line.transaction.account}
+                                        <p className="flex flex-wrap items-center gap-x-1 text-xs text-gray-500">
+                                            {line.transaction.date} · {KIND_LABELS[line.kind] ?? line.kind} ·
+                                            <CategoryCell
+                                                transactionId={line.transaction.transactionId}
+                                                entity={line.transaction.entity}
+                                                category={correction.categoryOf(line.transaction.transactionId, line.transaction.category ?? '')}
+                                                categories={correction.categories}
+                                                onSelect={name => correction.correct(line.transaction.transactionId!, name)}
+                                            />
+                                            · {line.transaction.account}
                                         </p>
                                     </div>
                                     <span className={`whitespace-nowrap font-medium tabular-nums ${line.contribution < 0 ? 'text-emerald-700' : 'text-gray-900'}`}>
@@ -157,6 +174,7 @@ const TransactionsDrawer = ({ month, year, person, total, onClose }: {
                     </div>
                 )}
             </div>
+            <CorrectionToast state={correction} />
         </div>
     );
 };
@@ -420,6 +438,7 @@ const MonthlyBalanceChecker: React.FC = () => {
                     person={drawer.person}
                     total={drawer.person === 'ASANKA' ? drawerData.asankaPaid : drawerData.divyaPaid}
                     onClose={() => setDrawer(null)}
+                    onCategoryChanged={() => void loadMonth(year, drawer.month, yearRequest.current)}
                 />
             )}
             {payData && (
