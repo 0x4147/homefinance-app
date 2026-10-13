@@ -40,6 +40,12 @@ public class UncategorizedTransaction {
     @Column(name = "confidence_score")
     private Double confidenceScore;
 
+    @Column(name = "ai_suggested_category")
+    private String aiSuggestedCategory;
+
+    @Column(name = "ai_confidence")
+    private Double aiConfidence;
+
     @Column(name = "created_at", columnDefinition = "TIMESTAMP DEFAULT CURRENT_TIMESTAMP", updatable = false)
     private LocalDateTime createdAt = LocalDateTime.now();
 

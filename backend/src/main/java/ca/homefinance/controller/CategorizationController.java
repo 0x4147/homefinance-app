@@ -9,6 +9,7 @@ import ca.homefinance.entity.UncategorizedTransaction;
 import ca.homefinance.repository.CategoryRepository;
 import ca.homefinance.repository.TransactionRepository;
 import ca.homefinance.repository.UncategorizedTransactionRepository;
+import ca.homefinance.service.AiCategorySuggestionService;
 import ca.homefinance.service.TransactionCategorizationService;
 import lombok.AllArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -35,6 +36,9 @@ public class CategorizationController {
     
     @Autowired
     private final UncategorizedTransactionRepository uncategorizedTransactionRepository;
+
+    @Autowired
+    private final AiCategorySuggestionService aiCategorySuggestionService;
 
     /**
      * Get suggested categories for a merchant
@@ -228,6 +232,15 @@ public class CategorizationController {
         return ResponseEntity.ok(Map.of(
                 "resolved", resolved,
                 "remaining", uncategorizedTransactionRepository.countByReviewedFalse()));
+    }
+
+    /**
+     * Ask AI to propose a category for each pending group. Suggestions only; nothing is reviewed or assigned.
+     */
+    @PostMapping("/suggest-ai")
+    public ResponseEntity<Map<String, Object>> suggestWithAi() {
+        AiCategorySuggestionService.Result result = aiCategorySuggestionService.suggestForPendingGroups();
+        return ResponseEntity.ok(Map.of("suggested", result.suggested(), "skipped", result.skipped()));
     }
 
     /**

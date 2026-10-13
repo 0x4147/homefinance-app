@@ -253,8 +253,19 @@ public class TransactionCategorizationService {
                             .reduce(BigDecimal.ZERO, BigDecimal::add);
                     List<String> suggestions = suggest(searchKey(first.getMerchant(), first.getDetails()), rules).stream()
                             .map(SuggestedCategory::name).toList();
+                    UncategorizedTransaction withAi = items.stream()
+                            .filter(item -> item.getAiSuggestedCategory() != null)
+                            .findFirst().orElse(null);
+                    String aiSuggestion = withAi != null ? withAi.getAiSuggestedCategory() : null;
+                    if (aiSuggestion != null) {
+                        List<String> merged = new ArrayList<>();
+                        merged.add(aiSuggestion);
+                        suggestions.stream().filter(name -> !name.equals(aiSuggestion)).forEach(merged::add);
+                        suggestions = merged;
+                    }
                     return new ReviewGroup(entry.getKey(), first.getMerchant(), items.size(), total, suggestions,
-                            items.stream().map(UncategorizedTransaction::getId).toList());
+                            items.stream().map(UncategorizedTransaction::getId).toList(),
+                            aiSuggestion, withAi != null ? withAi.getAiConfidence() : null);
                 })
                 .sorted(Comparator.comparing((ReviewGroup group) -> group.total().abs()).reversed())
                 .toList();

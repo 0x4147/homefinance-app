@@ -102,6 +102,8 @@ export interface ReviewGroup {
     total: number;
     suggestions: string[];
     ids: number[];
+    aiSuggestion?: string | null;
+    aiConfidence?: number | null;
 }
 
 export interface Category {
@@ -392,6 +394,13 @@ class ApiService {
     async recategorizePending(): Promise<{ resolved: number; remaining: number }> {
         log.info('Re-running categorization rules over pending reviews');
         return this.makeRequest<{ resolved: number; remaining: number }>('/categorization/recategorize', {
+            method: 'POST',
+        });
+    }
+
+    async suggestCategoriesWithAi(): Promise<{ suggested: number; skipped: number }> {
+        log.info('Requesting AI category suggestions for pending reviews');
+        return this.makeRequest<{ suggested: number; skipped: number }>('/categorization/suggest-ai', {
             method: 'POST',
         });
     }

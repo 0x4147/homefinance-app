@@ -62,6 +62,12 @@ public class AthenaService {
     @Value("${athena.external.openai.apiKey:}")
     private String openAiApiKey;
 
+    @Value("${athena.external.anthropic.baseUrl:https://api.anthropic.com/v1/messages}")
+    private String anthropicMessagesUrl;
+
+    @Value("${athena.external.anthropic.apiKey:}")
+    private String anthropicApiKey;
+
     private static final Duration INSIGHTS_TTL = Duration.ofHours(1);
 
     private String cachedInsights;
@@ -136,7 +142,21 @@ public class AthenaService {
         return amount == null ? "0" : amount.toPlainString();
     }
 
+    /**
+     * Free-form prompt for callers that send no transaction data (e.g. merchant names only).
+     * External AI is used only when {@code allowExternal} is true and it is enabled in config.
+     *
+     * @return the response text, or null when no permitted AI is reachable.
+     */
+    public String ask(String systemPrompt, String userPrompt, boolean allowExternal) {
+        return askAthena(systemPrompt, userPrompt, allowExternal);
+    }
+
     private String askAthena(String systemPrompt, String userPrompt) {
+        return askAthena(systemPrompt, userPrompt, true);
+    }
+
+    private String askAthena(String systemPrompt, String userPrompt, boolean allowExternal) {
         // 1) Try local first (e.g., Ollama endpoint compatible generate API)
         try {
             String localResponse = callLocalAi(systemPrompt, userPrompt);
@@ -148,7 +168,7 @@ public class AthenaService {
         }
 
         // 2) External AI only when explicitly enabled, since it sends transaction data off this machine
-        if (externalEnabled) {
+        if (allowExternal && externalEnabled) {
             try {
                 String externalResponse = callExternalAi(systemPrompt, userPrompt);
                 if (externalResponse != null && !externalResponse.isBlank()) {
@@ -179,6 +199,9 @@ public class AthenaService {
     }
 
     private String callExternalAi(String systemPrompt, String userPrompt) {
+        if ("anthropic".equalsIgnoreCase(externalProvider)) {
+            return callAnthropic(systemPrompt, userPrompt);
+        }
         if (!"openai".equalsIgnoreCase(externalProvider)) {
             throw new IllegalStateException("Unsupported external provider: " + externalProvider);
         }
@@ -216,6 +239,39 @@ public class AthenaService {
         if (!(message instanceof Map<?, ?> msgMap)) return null;
         Object content = msgMap.get("content");
         return content != null ? content.toString() : null;
+    }
+
+    private String callAnthropic(String systemPrompt, String userPrompt) {
+        if (anthropicApiKey == null || anthropicApiKey.isBlank()) {
+            throw new IllegalStateException("Anthropic API key not configured (athena.external.anthropic.apiKey)");
+        }
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        headers.set("x-api-key", anthropicApiKey);
+        headers.set("anthropic-version", "2023-06-01");
+
+        Map<String, Object> userMsg = new HashMap<>();
+        userMsg.put("role", "user");
+        userMsg.put("content", userPrompt);
+
+        Map<String, Object> body = new HashMap<>();
+        body.put("model", externalModel);
+        body.put("max_tokens", 1024);
+        body.put("system", systemPrompt);
+        body.put("messages", List.of(userMsg));
+
+        HttpEntity<Map<String, Object>> req = new HttpEntity<>(body, headers);
+        ResponseEntity<Map<String, Object>> resp = restTemplate.exchange(anthropicMessagesUrl, HttpMethod.POST, req, (Class<Map<String, Object>>)(Class<?>)Map.class);
+
+        Map<String, Object> responseBody = resp.getBody();
+        if (responseBody == null) return null;
+        Object content = responseBody.get("content");
+        if (!(content instanceof List<?> blocks) || blocks.isEmpty()) return null;
+        Object first = blocks.get(0);
+        if (!(first instanceof Map<?, ?> block)) return null;
+        Object text = block.get("text");
+        return text != null ? text.toString() : null;
     }
 }
 

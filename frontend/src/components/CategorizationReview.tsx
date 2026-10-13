@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { CheckCircle, AlertCircle, DollarSign, Building, RefreshCw } from 'lucide-react';
+import { CheckCircle, AlertCircle, DollarSign, Building, RefreshCw, Sparkles } from 'lucide-react';
 import { apiService, type Category, type ReviewGroup } from '../services/api';
 
 const CategorizationReview: React.FC = () => {
@@ -9,6 +9,7 @@ const CategorizationReview: React.FC = () => {
     const [selectedGroup, setSelectedGroup] = useState<ReviewGroup | null>(null);
     const [selectedCategory, setSelectedCategory] = useState<string>('');
     const [isProcessing, setIsProcessing] = useState(false);
+    const [checkedKeys, setCheckedKeys] = useState<Set<string>>(new Set());
 
     useEffect(() => {
         loadData();
@@ -72,6 +73,56 @@ const CategorizationReview: React.FC = () => {
         }
     };
 
+    const handleSuggestWithAi = async () => {
+        try {
+            setIsProcessing(true);
+            const { suggested, skipped } = await apiService.suggestCategoriesWithAi();
+            await loadData();
+            alert(`AI suggested a category for ${suggested} merchant${suggested === 1 ? '' : 's'}; ${skipped} left for you`);
+        } catch (error) {
+            console.error('Error requesting AI suggestions:', error);
+            alert('AI suggestions failed. Check that the local AI (Ollama) is running.');
+        } finally {
+            setIsProcessing(false);
+        }
+    };
+
+    const toggleChecked = (key: string) => {
+        setCheckedKeys((prev) => {
+            const next = new Set(prev);
+            if (next.has(key)) next.delete(key);
+            else next.add(key);
+            return next;
+        });
+    };
+
+    // Applies the AI suggestion for each ticked group; nothing is applied unless the user ticks and confirms.
+    const handleAcceptChecked = async () => {
+        const chosen = groups.filter((group) => checkedKeys.has(group.key) && group.aiSuggestion);
+        if (chosen.length === 0) return;
+        if (!window.confirm(`Apply the AI suggestion to ${chosen.length} merchant${chosen.length === 1 ? '' : 's'}?`)) {
+            return;
+        }
+
+        try {
+            setIsProcessing(true);
+            let resolved = 0;
+            for (const group of chosen) {
+                resolved += (await apiService.reviewGroup(group.key, group.aiSuggestion as string)).resolved;
+            }
+            setCheckedKeys(new Set());
+            clearSelection();
+            await loadData();
+            alert(`Categorized ${resolved} transaction${resolved === 1 ? '' : 's'}`);
+        } catch (error) {
+            console.error('Error accepting AI suggestions:', error);
+            await loadData();
+            alert('Some suggestions could not be applied. Please review the remaining merchants.');
+        } finally {
+            setIsProcessing(false);
+        }
+    };
+
     const formatCurrency = (amount: number) => {
         return new Intl.NumberFormat('en-CA', {
             style: 'currency',
@@ -99,7 +150,15 @@ const CategorizationReview: React.FC = () => {
                         One decision categorizes every transaction from that merchant, now and on future imports
                     </p>
                 </div>
-                <div className="flex items-center gap-6">
+                <div className="flex items-center gap-3">
+                    <button
+                        onClick={handleSuggestWithAi}
+                        disabled={isProcessing}
+                        className="flex items-center gap-2 px-3 py-2 border border-purple-300 rounded-lg text-sm font-medium text-purple-700 hover:bg-purple-50 disabled:opacity-50"
+                    >
+                        <Sparkles className="w-4 h-4" />
+                        Suggest with AI
+                    </button>
                     <button
                         onClick={handleRecategorize}
                         disabled={isProcessing}
@@ -135,6 +194,23 @@ const CategorizationReview: React.FC = () => {
                                     Uncategorized Merchants
                                 </h3>
                                 <p className="text-sm text-gray-500">Largest spend first</p>
+                                {groups.some((group) => group.aiSuggestion) && (
+                                    <div className="mt-2 flex items-center gap-3">
+                                        <button
+                                            onClick={() => setCheckedKeys(new Set(groups.filter((g) => g.aiSuggestion).map((g) => g.key)))}
+                                            className="text-xs text-purple-700 hover:underline"
+                                        >
+                                            Tick all AI-suggested
+                                        </button>
+                                        <button
+                                            onClick={handleAcceptChecked}
+                                            disabled={checkedKeys.size === 0 || isProcessing}
+                                            className="text-xs px-2 py-1 rounded bg-purple-600 text-white disabled:opacity-40"
+                                        >
+                                            Accept {checkedKeys.size} ticked
+                                        </button>
+                                    </div>
+                                )}
                             </div>
                             <div className="divide-y divide-gray-200 max-h-[32rem] overflow-y-auto">
                                 {groups.map((group) => (
@@ -149,6 +225,16 @@ const CategorizationReview: React.FC = () => {
                                         }`}
                                     >
                                         <div className="flex items-start justify-between gap-4">
+                                            {group.aiSuggestion && (
+                                                <input
+                                                    type="checkbox"
+                                                    checked={checkedKeys.has(group.key)}
+                                                    onClick={(e) => e.stopPropagation()}
+                                                    onChange={() => toggleChecked(group.key)}
+                                                    className="mt-1 shrink-0"
+                                                    aria-label={`Tick ${group.merchant}`}
+                                                />
+                                            )}
                                             <div className="flex-1 min-w-0">
                                                 <div className="flex items-center gap-2 mb-1">
                                                     <Building className="w-4 h-4 text-gray-400 shrink-0" />
@@ -167,7 +253,10 @@ const CategorizationReview: React.FC = () => {
                                                 </div>
                                             </div>
                                             {group.suggestions.length > 0 && (
-                                                <span className="text-xs px-2 py-1 rounded-full bg-gray-100 text-gray-700 shrink-0">
+                                                <span className={`text-xs px-2 py-1 rounded-full shrink-0 ${
+                                                    group.aiSuggestion ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-700'
+                                                }`}>
+                                                    {group.aiSuggestion && <Sparkles className="inline w-3 h-3 mr-1" />}
                                                     {group.suggestions[0]}?
                                                 </span>
                                             )}
