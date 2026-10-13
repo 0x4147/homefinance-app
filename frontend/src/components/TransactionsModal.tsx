@@ -3,6 +3,8 @@ import { ArrowDown, ArrowUp, ArrowUpDown, Search, X } from 'lucide-react';
 import type { Transaction, TransactionDto } from '../services/api';
 import { CategoryCell, CorrectionToast } from './CategoryCell';
 import { useCategoryCorrection } from './useCategoryCorrection';
+import { BalanceToggle, BalanceToast } from './BalanceToggle';
+import { useBalanceToggle } from './useBalanceToggle';
 
 type SortKey = 'date' | 'entity' | 'amount' | 'account' | 'category';
 type SortConfig = { key: SortKey; direction: 'asc' | 'desc' };
@@ -15,6 +17,7 @@ interface Row {
     amount: number;
     account: string;
     category: string;
+    shared: boolean;
 }
 
 const currency = new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD' });
@@ -42,6 +45,7 @@ function toRow(t: TransactionDto | Transaction, idx: number): Row {
         amount: Number(tx.amount || 0),
         account: tx.account || tx.sourceAccount || '',
         category: typeof tx.category === 'string' ? tx.category : (tx.category?.name || ''),
+        shared: tx.shared ?? true,
     };
 }
 
@@ -61,6 +65,7 @@ export function TransactionsModal({
     const [sortConfig, setSortConfig] = useState<SortConfig>({ key: 'date', direction: 'desc' });
     const [search, setSearch] = useState('');
     const correction = useCategoryCorrection(onCategoryChanged);
+    const balance = useBalanceToggle();
 
     // Fresh search each time the modal is opened with new content
     useEffect(() => { if (open) setSearch(''); }, [open, transactions]);
@@ -196,6 +201,7 @@ export function TransactionsModal({
                                             </th>
                                         );
                                     })}
+                                    <th scope="col" className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Balance</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100">
@@ -217,6 +223,17 @@ export function TransactionsModal({
                                                 onSelect={name => { if (r.id !== undefined) correction.correct(r.id, name); }}
                                             />
                                         </td>
+                                        <td className="whitespace-nowrap px-6 py-3">
+                                            <BalanceToggle
+                                                transactionId={r.id}
+                                                shared={balance.sharedOf(r.id, r.shared)}
+                                                category={correction.categoryOf(r.id, r.category)}
+                                                categories={correction.categories}
+                                                onToggle={next => {
+                                                    if (r.id !== undefined) balance.setShared(r.id, r.entity, balance.sharedOf(r.id, r.shared), next);
+                                                }}
+                                            />
+                                        </td>
                                         <td className={`whitespace-nowrap px-6 py-3 text-right font-semibold tabular-nums ${r.amount >= 0 ? 'text-emerald-600' : 'text-gray-900'}`}>
                                             {r.amount >= 0 ? '+' : '−'}{currency.format(Math.abs(r.amount))}
                                         </td>
@@ -228,6 +245,7 @@ export function TransactionsModal({
                 </div>
             </div>
             <CorrectionToast state={correction} />
+            <BalanceToast state={balance} />
         </div>
     );
 }

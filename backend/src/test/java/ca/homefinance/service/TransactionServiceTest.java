@@ -315,10 +315,10 @@ class TransactionServiceTest {
     @Test
     void getMonthlyBalanceTransactions_ListsOnlyThePayersLines_WithTheirContribution() {
         Category bill = category(32, "Rental Bill Income", Category.CategoryKind.INCOME, true);
-        stubBalance(
+        when(transactionRepository.findByDateBetween(any(LocalDate.class), any(LocalDate.class))).thenReturn(Arrays.asList(
                 spend(1, "100.00", asankaAccount, asanka),
                 transaction(2, "40.00", asankaAccount, asanka, bill),
-                spend(3, "60.00", cibc, asanka));
+                spend(3, "60.00", cibc, asanka)));
 
         List<BalanceLineDto> lines = transactionService.getMonthlyBalanceTransactions(1, 2024, "asanka");
 
@@ -327,6 +327,31 @@ class TransactionServiceTest {
         assertEquals("EXPENSE", lines.get(0).getKind());
         assertEquals(0, new BigDecimal("-40.00").compareTo(lines.get(1).getContribution()));
         assertEquals("INCOME", lines.get(1).getKind());
+    }
+
+    @Test
+    void getMonthlyBalanceTransactions_AlsoListsUncountedLines_WithZeroContribution() {
+        Category personal = category(2, "Personal", Category.CategoryKind.EXPENSE, false);
+        Transaction counted = spend(1, "100.00", asankaAccount, asanka);
+        Transaction leftOut = spend(2, "25.00", asankaAccount, asanka);
+        leftOut.setShared(false);
+        Transaction otherCategory = transaction(3, "-15.00", asankaAccount, asanka, personal);
+        Transaction uncategorized = transaction(4, "-5.00", asankaAccount, asanka, null);
+        Transaction divyas = spend(5, "60.00", divyaAccount, divya);
+        when(transactionRepository.findByDateBetween(LocalDate.of(2024, 1, 1), LocalDate.of(2024, 1, 31)))
+                .thenReturn(Arrays.asList(counted, leftOut, otherCategory, uncategorized, divyas));
+
+        List<BalanceLineDto> lines = transactionService.getMonthlyBalanceTransactions(1, 2024, "ASANKA");
+
+        assertEquals(4, lines.size());
+        assertTrue(lines.get(0).getTransaction().isCountsInBalance());
+        assertEquals(0, new BigDecimal("100.00").compareTo(lines.get(0).getContribution()));
+        for (BalanceLineDto uncounted : lines.subList(1, 4)) {
+            assertFalse(uncounted.getTransaction().isCountsInBalance());
+            assertEquals(0, BigDecimal.ZERO.compareTo(uncounted.getContribution()));
+        }
+        assertEquals(0, new BigDecimal("100.00").compareTo(
+                lines.stream().map(BalanceLineDto::getContribution).reduce(BigDecimal.ZERO, BigDecimal::add)));
     }
 
     @Test
@@ -368,6 +393,65 @@ class TransactionServiceTest {
     private void stubBalance(Transaction... transactions) {
         when(transactionRepository.findBalanceTransactions(any(LocalDate.class), any(LocalDate.class)))
                 .thenReturn(Arrays.asList(transactions));
+    }
+
+    @Test
+    void listedTransactions_ShowWhetherTheyCountTowardTheBalance() {
+        Category personal = category(2, "Personal", Category.CategoryKind.EXPENSE, false);
+        Transaction counted = spend(1, "10.00", cibc, asanka);
+        Transaction excluded = spend(2, "20.00", cibc, asanka);
+        excluded.setShared(false);
+        Transaction wrongCategory = transaction(3, "-30.00", cibc, asanka, personal);
+        when(transactionRepository.findByDateBetween(any(LocalDate.class), any(LocalDate.class)))
+                .thenReturn(Arrays.asList(counted, excluded, wrongCategory));
+
+        List<TransactionDto> result = transactionService.getTransactionDtosByDateRange(
+                LocalDate.of(2024, 1, 1), LocalDate.of(2024, 1, 31));
+
+        assertTrue(result.get(0).isShared());
+        assertTrue(result.get(0).isCountsInBalance());
+        assertFalse(result.get(1).isShared());
+        assertFalse(result.get(1).isCountsInBalance());
+        assertTrue(result.get(2).isShared());
+        assertFalse(result.get(2).isCountsInBalance());
+    }
+
+    @Test
+    void setShared_ExcludesTransactionFromBalance() {
+        Transaction tx = spend(7, "10.00", cibc, asanka);
+        when(transactionRepository.findById(7)).thenReturn(Optional.of(tx));
+        when(transactionRepository.save(any(Transaction.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        TransactionDto result = transactionService.setShared(7, false);
+
+        assertFalse(tx.isShared());
+        assertFalse(result.isShared());
+        assertFalse(result.isCountsInBalance());
+        verify(transactionRepository).save(tx);
+    }
+
+    @Test
+    void setShared_IncludesTransactionInBalance() {
+        Transaction tx = spend(7, "10.00", cibc, asanka);
+        tx.setShared(false);
+        when(transactionRepository.findById(7)).thenReturn(Optional.of(tx));
+        when(transactionRepository.save(any(Transaction.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        TransactionDto result = transactionService.setShared(7, true);
+
+        assertTrue(result.isShared());
+        assertTrue(result.isCountsInBalance());
+    }
+
+    @Test
+    void setShared_UnknownTransaction_ReturnsNotFound() {
+        when(transactionRepository.findById(99)).thenReturn(Optional.empty());
+
+        ResponseStatusException e = assertThrows(ResponseStatusException.class,
+                () -> transactionService.setShared(99, false));
+
+        assertEquals(HttpStatus.NOT_FOUND, e.getStatusCode());
+        verify(transactionRepository, never()).save(any());
     }
 
     private static TransactionDto dto(String amount, String entity, String account, String type, String category, String person) {

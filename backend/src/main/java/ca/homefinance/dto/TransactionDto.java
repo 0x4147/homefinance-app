@@ -21,5 +21,14 @@ public class TransactionDto {
     private String transactionType;
     private String category;
     private String person;
+    /** The editable flag: false means this one transaction is kept out of the shared balance. */
+    private boolean shared;
+    /** Read-only result of the balance rule: shared, and in a category that counts. */
+    private boolean countsInBalance;
+
+    public TransactionDto(Integer transactionId, BigDecimal amount, LocalDate date, String entity, String details,
+                          String account, String transactionType, String category, String person) {
+        this(transactionId, amount, date, entity, details, account, transactionType, category, person, false, false);
+    }
 
 }

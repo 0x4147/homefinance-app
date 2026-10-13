@@ -16,6 +16,8 @@ import { rangeForPreset } from './utils/dateRange';
 import type { RangePreset, DateRange } from './utils/dateRange';
 import { CategoryCell, CorrectionToast } from './components/CategoryCell';
 import { useCategoryCorrection } from './components/useCategoryCorrection';
+import { BalanceToggle, BalanceToast } from './components/BalanceToggle';
+import { useBalanceToggle } from './components/useBalanceToggle';
 import { LargestTransactionsCard, RecurringChargesCard } from './components/SpendingBehaviourCards';
 import { TransactionsModal } from './components/TransactionsModal';
 
@@ -217,6 +219,7 @@ const ViewTransactions = () => {
     const [error, setError] = useState<string>('');
     const [sortConfig, setSortConfig] = useState<{ key: keyof TransactionDto; direction: "asc" | "desc" } | null>(null);
     const correction = useCategoryCorrection();
+    const balance = useBalanceToggle();
 
     // Load automatically on arrival and whenever a valid range is chosen
     useEffect(() => {
@@ -355,12 +358,15 @@ const ViewTransactions = () => {
                                     <th onClick={() => handleSort("category")} className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer">
                                         Category {renderSortIcon("category")}
                                     </th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        Balance
+                                    </th>
                                 </tr>
                             </thead>
                             <tbody className="bg-white divide-y divide-gray-200">
                                 {isLoading ? (
                                     <tr>
-                                        <td colSpan={5} className="px-6 py-4 text-center">
+                                        <td colSpan={7} className="px-6 py-4 text-center">
                                             <div className="flex items-center justify-center">
                                                 <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
                                                 <span className="ml-2 text-gray-600">Loading transactions...</span>
@@ -402,6 +408,17 @@ const ViewTransactions = () => {
                                                     onSelect={(name) => correction.correct(transaction.transactionId!, name)}
                                                 />
                                             </td>
+                                            <td className="px-6 py-4 whitespace-nowrap">
+                                                <BalanceToggle
+                                                    transactionId={transaction.transactionId}
+                                                    shared={balance.sharedOf(transaction.transactionId, transaction.shared ?? true)}
+                                                    category={correction.categoryOf(transaction.transactionId, transaction.category ?? '')}
+                                                    categories={correction.categories}
+                                                    onToggle={(next) => balance.setShared(
+                                                        transaction.transactionId!, transaction.entity,
+                                                        balance.sharedOf(transaction.transactionId, transaction.shared ?? true), next)}
+                                                />
+                                            </td>
                                         </tr>
                                     ))
                                 )}
@@ -411,6 +428,7 @@ const ViewTransactions = () => {
                 )}
             </div>
             <CorrectionToast state={correction} />
+            <BalanceToast state={balance} />
         </div>
     );
 };

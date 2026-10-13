@@ -162,7 +162,9 @@ public class TransactionService {
     }
 
     /**
-     * The transactions behind one person's "paid" figure; the contributions sum to
+     * Every transaction the person paid for in the month, so the ones left out can be reviewed and
+     * included. Those that don't count (not shared, or in a category that doesn't count, or
+     * uncategorized) have a zero contribution, so the contributions still sum to
      * {@code asankaPaid} / {@code divyaPaid} from {@link #getMonthlyBalance}.
      */
     public List<BalanceLineDto> getMonthlyBalanceTransactions(int month, int year, String person) {
@@ -174,7 +176,8 @@ public class TransactionService {
             throw badRequest("Invalid person: " + person);
         }
 
-        List<BalanceLineDto> lines = loadBalanceTransactions(month, year).stream()
+        LocalDate startDate = LocalDate.of(year, month, 1);
+        List<BalanceLineDto> lines = getTransactionsByDateRange(startDate, startDate.withDayOfMonth(startDate.lengthOfMonth())).stream()
                 .filter(tx -> payerCode(tx).equals(payer))
                 .map(tx -> new BalanceLineDto(toDto(tx), tx.balanceContribution(), tx.getType().name()))
                 .sorted(Comparator.comparing((BalanceLineDto l) -> l.getTransaction().getDate()))
@@ -268,8 +271,18 @@ public class TransactionService {
                 tx.getAccount().getCode(),
                 tx.getType().name(),
                 tx.getCategory() != null ? tx.getCategory().getName() : "Unknown",
-                tx.getPerson() != null ? tx.getPerson().getName() : ""
+                tx.getPerson() != null ? tx.getPerson().getName() : "",
+                tx.isShared(),
+                tx.countsInBalance()
         );
+    }
+
+    /** Includes or excludes one transaction from the shared balance; whether it then counts still depends on its category. */
+    public TransactionDto setShared(Integer transactionId, boolean shared) {
+        Transaction transaction = transactionRepository.findById(transactionId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Transaction not found: " + transactionId));
+        transaction.setShared(shared);
+        return toDto(transactionRepository.save(transaction));
     }
 
     private TransactionSummary summarizeExpenses(List<Transaction> transactions,

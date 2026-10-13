@@ -3,6 +3,8 @@ import { AlertTriangle, CheckCircle2, CircleDollarSign, Loader2, Pencil, Scale, 
 import { apiService } from '../services/api';
 import { CategoryCell, CorrectionToast } from './CategoryCell';
 import { useCategoryCorrection } from './useCategoryCorrection';
+import { BalanceToggle, BalanceToast } from './BalanceToggle';
+import { useBalanceToggle } from './useBalanceToggle';
 import type { BalanceLine, MonthlyBalanceResponseDto, SettlementStatus } from '../services/api';
 
 type Person = 'ASANKA' | 'DIVYA';
@@ -101,6 +103,8 @@ const TransactionsDrawer = ({ month, year, person, total, onClose, onCategoryCha
         onCategoryChanged();
     }, [onCategoryChanged]);
     const correction = useCategoryCorrection(handleCategoryChanged);
+    // Excluding a transaction removes it from this list and from the totals, so refresh the same way
+    const balanceToggle = useBalanceToggle(handleCategoryChanged);
 
     useEffect(() => {
         let cancelled = false;
@@ -137,11 +141,14 @@ const TransactionsDrawer = ({ month, year, person, total, onClose, onCategoryCha
                     {!error && lines === null && (
                         <div className="flex items-center gap-2 text-gray-500"><Loader2 className="h-4 w-4 animate-spin" /> Loading…</div>
                     )}
-                    {lines && lines.length === 0 && <p className="text-gray-500">No transactions make up this figure.</p>}
+                    {lines && lines.length === 0 && <p className="text-gray-500">No transactions this month.</p>}
                     {lines && lines.length > 0 && (
                         <ul className="divide-y divide-gray-100">
                             {lines.map((line, i) => (
-                                <li key={line.transaction.transactionId ?? i} className="flex items-start justify-between gap-4 py-3">
+                                <li
+                                    key={line.transaction.transactionId ?? i}
+                                    className={`flex items-start justify-between gap-4 py-3 ${line.transaction.countsInBalance === false ? 'opacity-60' : ''}`}
+                                >
                                     <div className="min-w-0">
                                         <p className="truncate font-medium text-gray-900">{line.transaction.entity}</p>
                                         <p className="flex flex-wrap items-center gap-x-1 text-xs text-gray-500">
@@ -155,10 +162,27 @@ const TransactionsDrawer = ({ month, year, person, total, onClose, onCategoryCha
                                             />
                                             · {line.transaction.account}
                                         </p>
+                                        <div className="mt-1">
+                                            <BalanceToggle
+                                                transactionId={line.transaction.transactionId}
+                                                shared={balanceToggle.sharedOf(line.transaction.transactionId, line.transaction.shared ?? true)}
+                                                category={correction.categoryOf(line.transaction.transactionId, line.transaction.category ?? '')}
+                                                categories={correction.categories}
+                                                onToggle={next => balanceToggle.setShared(
+                                                    line.transaction.transactionId!, line.transaction.entity,
+                                                    balanceToggle.sharedOf(line.transaction.transactionId, line.transaction.shared ?? true), next)}
+                                            />
+                                        </div>
                                     </div>
-                                    <span className={`whitespace-nowrap font-medium tabular-nums ${line.contribution < 0 ? 'text-emerald-700' : 'text-gray-900'}`}>
-                                        {formatCurrency(line.contribution)}
-                                    </span>
+                                    {line.transaction.countsInBalance === false ? (
+                                        <span className="whitespace-nowrap text-sm tabular-nums text-gray-400" title="Not included in the total">
+                                            {formatCurrency(Math.abs(line.transaction.amount))}
+                                        </span>
+                                    ) : (
+                                        <span className={`whitespace-nowrap font-medium tabular-nums ${line.contribution < 0 ? 'text-emerald-700' : 'text-gray-900'}`}>
+                                            {formatCurrency(line.contribution)}
+                                        </span>
+                                    )}
                                 </li>
                             ))}
                         </ul>
@@ -175,6 +199,7 @@ const TransactionsDrawer = ({ month, year, person, total, onClose, onCategoryCha
                 )}
             </div>
             <CorrectionToast state={correction} />
+            <BalanceToast state={balanceToggle} />
         </div>
     );
 };

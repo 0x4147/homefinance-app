@@ -24,6 +24,7 @@ export interface Transaction {
     transactionType: string;
     category: string;
     person: string;
+    shared?: boolean;
     uncategorizedTransaction?: { id: number } | null;
 }
 
@@ -37,6 +38,10 @@ export interface TransactionDto {
     transactionType: string;
     category?: string;
     person: string;
+    /** False when this one transaction is kept out of the shared balance. */
+    shared?: boolean;
+    /** Whether it currently counts toward the balance (shared, and in a category that counts). */
+    countsInBalance?: boolean;
 }
 
 export interface TransactionSummary {
@@ -348,6 +353,14 @@ class ApiService {
         return this.makeRequest<CategoryCorrection>('/categorization/correct', {
             method: 'POST',
             body: JSON.stringify({ transactionId, category }),
+        });
+    }
+
+    async setTransactionShared(transactionId: number, shared: boolean): Promise<TransactionDto> {
+        log.info(`Setting transaction ${transactionId} shared=${shared}`);
+        return this.makeRequest<TransactionDto>(`/transaction/${transactionId}/shared`, {
+            method: 'PUT',
+            body: JSON.stringify({ shared }),
         });
     }
 

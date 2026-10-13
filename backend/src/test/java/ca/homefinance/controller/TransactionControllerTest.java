@@ -22,6 +22,7 @@ import java.util.Collections;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 /**
@@ -78,6 +79,21 @@ class TransactionControllerTest {
                         .content(objectMapper.writeValueAsString(dto)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.transactionId").value(1));
+    }
+
+    @Test
+    void setShared_ShouldDelegateToServiceAndReturnTheUpdatedTransaction() throws Exception {
+        TransactionDto updated = new TransactionDto(5, new BigDecimal("-10.00"), LocalDate.of(2024, 1, 1),
+                "Entity", null, "CIBC", "EXPENSE", "Groceries", "Asanka", false, false);
+        when(transactionService.setShared(5, false)).thenReturn(updated);
+
+        mockMvc.perform(put("/api/v1/transaction/5/shared")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"shared\": false}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.transactionId").value(5))
+                .andExpect(jsonPath("$.shared").value(false))
+                .andExpect(jsonPath("$.countsInBalance").value(false));
     }
 
     @Test

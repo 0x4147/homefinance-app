@@ -40,6 +40,14 @@ public class TransactionController {
         return ResponseEntity.ok(transactionService.createTransaction(transaction, allowDuplicate));
     }
 
+    @PutMapping("/{transactionId}/shared")
+    public ResponseEntity<TransactionDto> setShared(@PathVariable Integer transactionId,
+                                                    @RequestBody SharedRequest request) {
+        return ResponseEntity.ok(transactionService.setShared(transactionId, request.shared()));
+    }
+
+    public record SharedRequest(boolean shared) {}
+
     @GetMapping("/getMonthlyBalance")
     public ResponseEntity<MonthlyBalanceResponseDto> getMonthlyBalance(@RequestParam String month, @RequestParam String year) {
         try {
