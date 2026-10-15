@@ -254,7 +254,8 @@ const ViewTransactions = () => {
     };
 
     const formatDate = (dateString: string) => {
-        return new Date(dateString).toLocaleDateString('en-CA', {
+        // yyyy-MM-dd alone is parsed as UTC midnight (shows the previous day locally); add a time to parse as local
+        return new Date(`${dateString}T00:00:00`).toLocaleDateString('en-CA', {
             year: 'numeric',
             month: 'short',
             day: 'numeric'

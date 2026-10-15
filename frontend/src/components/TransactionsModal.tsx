@@ -23,7 +23,7 @@ interface Row {
 const currency = new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD' });
 
 const formatDate = (dateString: string) =>
-    new Date(dateString).toLocaleDateString('en-CA', { year: 'numeric', month: 'short', day: 'numeric' });
+    new Date(`${dateString}T00:00:00`).toLocaleDateString('en-CA', { year: 'numeric', month: 'short', day: 'numeric' });
 
 const COLUMNS: { key: SortKey; label: string; align?: 'right' }[] = [
     { key: 'date', label: 'Date' },
