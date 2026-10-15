@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { CheckCircle, AlertCircle, DollarSign, Building, RefreshCw, Sparkles } from 'lucide-react';
-import { apiService, type Category, type ReviewGroup } from '../services/api';
+import { CheckCircle, AlertCircle, DollarSign, Building, RefreshCw, Sparkles, Calendar } from 'lucide-react';
+import { apiService, type Category, type ReviewDirection, type ReviewGroup } from '../services/api';
 
 const CategorizationReview: React.FC = () => {
     const [groups, setGroups] = useState<ReviewGroup[]>([]);
@@ -130,7 +130,39 @@ const CategorizationReview: React.FC = () => {
         }).format(Math.abs(amount));
     };
 
-    const pendingTransactions = groups.reduce((sum, group) => sum + group.count, 0);
+    // Dates arrive as yyyy-MM-dd; build them locally so the day doesn't shift with the timezone.
+    const formatDate = (date: string) => {
+        const [year, month, day] = date.split('-').map(Number);
+        return new Date(year, month - 1, day).toLocaleDateString('en-CA', {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric'
+        });
+    };
+
+    // The backend decides the direction (a credit is money in, e.g. a refund); this only renders it.
+    const DirectionBadge = ({ direction }: { direction: ReviewDirection }) => {
+        const styles = {
+            CREDIT: 'bg-green-100 text-green-700',
+            DEBIT: 'bg-gray-100 text-gray-600',
+            MIXED: 'bg-amber-100 text-amber-700',
+        };
+        const labels = { CREDIT: 'Credit', DEBIT: 'Debit', MIXED: 'Credits & debits' };
+        return (
+            <span className={`text-xs px-2 py-0.5 rounded-full shrink-0 ${styles[direction]}`}>
+                {labels[direction]}
+            </span>
+        );
+    };
+
+    const formatDateRange = (group: ReviewGroup) => {
+        if (!group.firstDate || !group.lastDate) return null;
+        return group.firstDate === group.lastDate
+            ? formatDate(group.firstDate)
+            : `${formatDate(group.firstDate)} – ${formatDate(group.lastDate)}`;
+    };
+
+    const pendingTransactions =groups.reduce((sum, group) => sum + group.count, 0);
 
     if (isLoading) {
         return (
@@ -241,6 +273,7 @@ const CategorizationReview: React.FC = () => {
                                                     <span className="font-medium text-gray-900 truncate">
                                                         {group.merchant}
                                                     </span>
+                                                    <DirectionBadge direction={group.direction} />
                                                 </div>
                                                 <div className="flex items-center gap-4 text-sm text-gray-500">
                                                     <span>{group.count} transaction{group.count === 1 ? '' : 's'}</span>
@@ -250,6 +283,12 @@ const CategorizationReview: React.FC = () => {
                                                             {formatCurrency(group.total)}
                                                         </span>
                                                     </div>
+                                                    {formatDateRange(group) && (
+                                                        <div className="flex items-center gap-1">
+                                                            <Calendar className="w-4 h-4" />
+                                                            <span>{formatDateRange(group)}</span>
+                                                        </div>
+                                                    )}
                                                 </div>
                                             </div>
                                             {group.suggestions.length > 0 && (
@@ -290,9 +329,38 @@ const CategorizationReview: React.FC = () => {
                                             <div>
                                                 <span className="text-gray-600">Total:</span>
                                                 <span className="ml-2 font-medium">{formatCurrency(selectedGroup.total)}</span>
+                                                <span className="ml-2"><DirectionBadge direction={selectedGroup.direction} /></span>
                                             </div>
+                                            {formatDateRange(selectedGroup) && (
+                                                <div>
+                                                    <span className="text-gray-600">Date:</span>
+                                                    <span className="ml-2 font-medium">{formatDateRange(selectedGroup)}</span>
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
+
+                                    {(selectedGroup.transactions.length > 1 || selectedGroup.direction !== 'DEBIT') && (
+                                        <div>
+                                            <h4 className="text-sm font-medium text-gray-700 mb-2">
+                                                Transactions in this group
+                                            </h4>
+                                            <ul className="divide-y divide-gray-100 border border-gray-200 rounded-lg max-h-56 overflow-y-auto text-sm">
+                                                {selectedGroup.transactions.map((tx) => (
+                                                    <li key={tx.id} className="flex items-center justify-between gap-3 px-3 py-2">
+                                                        <div className="min-w-0">
+                                                            <div className="text-gray-500 text-xs">{formatDate(tx.date)}</div>
+                                                            <div className="truncate text-gray-800" title={tx.merchant}>{tx.merchant}</div>
+                                                        </div>
+                                                        <span className={`font-medium shrink-0 ${tx.direction === 'CREDIT' ? 'text-green-700' : 'text-gray-900'}`}>
+                                                            {tx.direction === 'CREDIT' ? '+' : '−'}{formatCurrency(tx.amount)}
+                                                            <span className="ml-1 text-xs font-normal">{tx.direction === 'CREDIT' ? 'credit' : 'debit'}</span>
+                                                        </span>
+                                                    </li>
+                                                ))}
+                                            </ul>
+                                        </div>
+                                    )}
 
                                     {selectedGroup.suggestions.length > 0 && (
                                         <div>

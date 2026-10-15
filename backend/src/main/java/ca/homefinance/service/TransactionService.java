@@ -293,9 +293,11 @@ public class TransactionService {
         Map<String, List<Transaction>> details = detailsMapSupplier.get();
 
         for (Transaction tx : transactions) {
-            if (tx.getType() == Transaction.TransactionType.EXPENSE) {
+            Transaction.TransactionType type = tx.getType();
+            if (type == Transaction.TransactionType.EXPENSE || type == Transaction.TransactionType.REFUND) {
                 String key = keyExtractor.apply(tx);
-                // Spending is stored as money out (negative); report it as a positive total.
+                // Spending is stored as money out (negative); report it as a positive total. A refund is
+                // money in, so it nets against the spending in its own category.
                 totals.merge(key, tx.getAmount().negate(), BigDecimal::add);
                 details.computeIfAbsent(key, k -> new ArrayList<>()).add(tx);
             }

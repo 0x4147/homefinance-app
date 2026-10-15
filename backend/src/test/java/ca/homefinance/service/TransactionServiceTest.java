@@ -377,6 +377,18 @@ class TransactionServiceTest {
     }
 
     @Test
+    void getExpensesByCategory_RefundNetsAgainstSpendingInItsCategory() {
+        Category shopping = category(6, "Shopping", Category.CategoryKind.EXPENSE, true);
+        Transaction purchase = transaction(1, "-100.00", asankaAccount, asanka, shopping);
+        Transaction refund = transaction(2, "30.00", asankaAccount, asanka, shopping);
+        when(transactionRepository.findByDateBetween(any(), any())).thenReturn(Arrays.asList(purchase, refund));
+
+        var summary = transactionService.getExpensesByCategory(LocalDate.of(2024, 1, 1), LocalDate.of(2024, 1, 31));
+
+        assertEquals(0, new BigDecimal("70.00").compareTo(summary.getTotals().get("Shopping")));
+    }
+
+    @Test
     void getMonthlyBalance_InvalidMonth_ShouldThrowException() {
         assertThrows(java.time.DateTimeException.class, () -> transactionService.getMonthlyBalance(13, 2024));
     }

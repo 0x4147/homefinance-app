@@ -23,6 +23,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.*;
+import java.util.stream.Collectors;
 
 import static ca.homefinance.helper.TransactionCategorizationHelper.*;
 
@@ -263,12 +264,31 @@ public class TransactionCategorizationService {
                         suggestions.stream().filter(name -> !name.equals(aiSuggestion)).forEach(merged::add);
                         suggestions = merged;
                     }
+                    List<LocalDate> dates = items.stream().map(UncategorizedTransaction::getDate)
+                            .filter(Objects::nonNull).toList();
                     return new ReviewGroup(entry.getKey(), first.getMerchant(), items.size(), total, suggestions,
                             items.stream().map(UncategorizedTransaction::getId).toList(),
-                            aiSuggestion, withAi != null ? withAi.getAiConfidence() : null);
+                            aiSuggestion, withAi != null ? withAi.getAiConfidence() : null,
+                            dates.stream().min(Comparator.naturalOrder()).orElse(null),
+                            dates.stream().max(Comparator.naturalOrder()).orElse(null),
+                            items.stream()
+                                    .sorted(Comparator.comparing(UncategorizedTransaction::getDate,
+                                            Comparator.nullsLast(Comparator.reverseOrder())))
+                                    .map(item -> new ReviewGroup.Line(item.getId(), item.getDate(),
+                                            item.getMerchant(), item.getAmount(),
+                                            ReviewGroup.Direction.of(item.getAmount())))
+                                    .toList(),
+                            groupDirection(items));
                 })
                 .sorted(Comparator.comparing((ReviewGroup group) -> group.total().abs()).reversed())
                 .toList();
+    }
+
+    private static ReviewGroup.Direction groupDirection(List<UncategorizedTransaction> items) {
+        Set<ReviewGroup.Direction> directions = items.stream()
+                .map(item -> ReviewGroup.Direction.of(item.getAmount()))
+                .collect(Collectors.toSet());
+        return directions.size() == 1 ? directions.iterator().next() : ReviewGroup.Direction.MIXED;
     }
 
     private MerchantRule findBestRule(String key, List<MerchantRule> rules) {

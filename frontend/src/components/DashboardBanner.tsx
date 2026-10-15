@@ -28,12 +28,14 @@ export const DashboardBanner = ({ transactions = [] }: { transactions?: Tx[] }) 
     const hour = now.getHours();
     const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
 
-    // Spend per calendar month from expense transactions (the feed already covers the past 12 months).
+    // Spend per calendar month from expense transactions, net of refunds (the feed already covers the past 12 months).
     const spend = new Map<string, number>();
     for (const t of transactions) {
-        if ((t.transactionType || '').toUpperCase() !== 'EXPENSE') continue;
+        const type = (t.transactionType || '').toUpperCase();
+        if (type !== 'EXPENSE' && type !== 'REFUND') continue;
         const key = t.date.slice(0, 7);
-        spend.set(key, (spend.get(key) ?? 0) + Math.abs(t.amount));
+        // Amounts are signed cash flow: money out is negative, so spend is the negated amount.
+        spend.set(key, (spend.get(key) ?? 0) - t.amount);
     }
     const thisKey = monthKey(now);
     // The current month is usually not imported yet, so lead with the latest completed month that has data.

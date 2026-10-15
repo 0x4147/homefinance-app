@@ -109,6 +109,20 @@ export interface ReviewGroup {
     ids: number[];
     aiSuggestion?: string | null;
     aiConfidence?: number | null;
+    firstDate?: string | null;
+    lastDate?: string | null;
+    transactions: ReviewTransaction[];
+    direction: ReviewDirection;
+}
+
+export type ReviewDirection = 'DEBIT' | 'CREDIT' | 'MIXED';
+
+export interface ReviewTransaction {
+    id: number;
+    date: string;
+    merchant: string;
+    amount: number;
+    direction: ReviewDirection;
 }
 
 export interface Category {

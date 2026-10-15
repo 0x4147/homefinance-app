@@ -1,6 +1,7 @@
 package ca.homefinance.dto;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.List;
 
 /**
@@ -14,7 +15,26 @@ import java.util.List;
  * @param ids          the pending {@code UncategorizedTransaction} ids in the group
  * @param aiSuggestion category proposed by AI, or null; never applied without a user decision
  * @param aiConfidence the model's self-reported confidence for {@code aiSuggestion}, or null
+ * @param firstDate    date of the earliest transaction in the group, or null if none is dated
+ * @param lastDate     date of the latest transaction in the group, or null if none is dated
+ * @param transactions the individual pending transactions, newest first
+ * @param direction    DEBIT or CREDIT when every transaction agrees, MIXED otherwise
  */
 public record ReviewGroup(String key, String merchant, int count, BigDecimal total,
                           List<String> suggestions, List<Integer> ids,
-                          String aiSuggestion, Double aiConfidence) {}
+                          String aiSuggestion, Double aiConfidence,
+                          LocalDate firstDate, LocalDate lastDate,
+                          List<Line> transactions, Direction direction) {
+
+    /** Which way the money moved: a debit is money out, a credit is money in (e.g. a refund). */
+    public enum Direction {
+        DEBIT, CREDIT, MIXED;
+
+        public static Direction of(BigDecimal amount) {
+            return amount != null && amount.signum() > 0 ? CREDIT : DEBIT;
+        }
+    }
+
+    /** One pending transaction within a group. */
+    public record Line(Integer id, LocalDate date, String merchant, BigDecimal amount, Direction direction) {}
+}
