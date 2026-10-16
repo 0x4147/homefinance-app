@@ -1,6 +1,8 @@
-import React, { useState, useEffect } from 'react';
-import { CheckCircle, AlertCircle, DollarSign, Building, RefreshCw, Sparkles, Calendar } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { CheckCircle, AlertCircle, DollarSign, Building, RefreshCw, Sparkles, Calendar, Loader2 } from 'lucide-react';
 import { apiService, type Category, type ReviewDirection, type ReviewGroup } from '../services/api';
+import { ToastStack, type ToastMessage } from './Toast';
+import ConfirmDialog from './ConfirmDialog';
 
 const CategorizationReview: React.FC = () => {
     const [groups, setGroups] = useState<ReviewGroup[]>([]);
@@ -10,6 +12,16 @@ const CategorizationReview: React.FC = () => {
     const [selectedCategory, setSelectedCategory] = useState<string>('');
     const [isProcessing, setIsProcessing] = useState(false);
     const [checkedKeys, setCheckedKeys] = useState<Set<string>>(new Set());
+    const [toasts, setToasts] = useState<ToastMessage[]>([]);
+    const [confirmCount, setConfirmCount] = useState<number | null>(null);
+
+    const dismissToast = useCallback((id: number) => {
+        setToasts((prev) => prev.filter((t) => t.id !== id));
+    }, []);
+
+    const notify = (type: ToastMessage['type'], text: string) => {
+        setToasts((prev) => [...prev, { id: Date.now() + Math.random(), type, text }]);
+    };
 
     useEffect(() => {
         loadData();
@@ -40,7 +52,7 @@ const CategorizationReview: React.FC = () => {
     // Saving a rule can clear other groups too (name variants of the same merchant), so reload.
     const handleReviewGroup = async () => {
         if (!selectedGroup || !selectedCategory) {
-            alert('Please select a merchant and category');
+            notify('error', 'Please select a merchant and category');
             return;
         }
 
@@ -49,10 +61,10 @@ const CategorizationReview: React.FC = () => {
             const { resolved } = await apiService.reviewGroup(selectedGroup.key, selectedCategory);
             clearSelection();
             await loadData();
-            alert(`Categorized ${resolved} transaction${resolved === 1 ? '' : 's'} as ${selectedCategory}`);
+            notify('success', `Categorized ${resolved} transaction${resolved === 1 ? '' : 's'} as ${selectedCategory}`);
         } catch (error) {
             console.error('Error reviewing merchant group:', error);
-            alert('Failed to categorize. Please try again.');
+            notify('error', 'Failed to categorize. Please try again.');
         } finally {
             setIsProcessing(false);
         }
@@ -64,10 +76,10 @@ const CategorizationReview: React.FC = () => {
             const { resolved, remaining } = await apiService.recategorizePending();
             clearSelection();
             await loadData();
-            alert(`Rules resolved ${resolved} transactions; ${remaining} still need review`);
+            notify('success', `Rules resolved ${resolved} transactions; ${remaining} still need review`);
         } catch (error) {
             console.error('Error re-running categorization:', error);
-            alert('Failed to re-run categorization. Please try again.');
+            notify('error', 'Failed to re-run categorization. Please try again.');
         } finally {
             setIsProcessing(false);
         }
@@ -78,10 +90,10 @@ const CategorizationReview: React.FC = () => {
             setIsProcessing(true);
             const { suggested, skipped } = await apiService.suggestCategoriesWithAi();
             await loadData();
-            alert(`AI suggested a category for ${suggested} merchant${suggested === 1 ? '' : 's'}; ${skipped} left for you`);
+            notify('success', `AI suggested a category for ${suggested} merchant${suggested === 1 ? '' : 's'}; ${skipped} left for you`);
         } catch (error) {
             console.error('Error requesting AI suggestions:', error);
-            alert('AI suggestions failed. Check that the local AI (Ollama) is running.');
+            notify('error', 'AI suggestions failed. Check that the local AI (Ollama) is running.');
         } finally {
             setIsProcessing(false);
         }
@@ -97,12 +109,15 @@ const CategorizationReview: React.FC = () => {
     };
 
     // Applies the AI suggestion for each ticked group; nothing is applied unless the user ticks and confirms.
+    const requestAcceptChecked = () => {
+        const count = groups.filter((group) => checkedKeys.has(group.key) && group.aiSuggestion).length;
+        if (count > 0) setConfirmCount(count);
+    };
+
     const handleAcceptChecked = async () => {
+        setConfirmCount(null);
         const chosen = groups.filter((group) => checkedKeys.has(group.key) && group.aiSuggestion);
         if (chosen.length === 0) return;
-        if (!window.confirm(`Apply the AI suggestion to ${chosen.length} merchant${chosen.length === 1 ? '' : 's'}?`)) {
-            return;
-        }
 
         try {
             setIsProcessing(true);
@@ -113,11 +128,11 @@ const CategorizationReview: React.FC = () => {
             setCheckedKeys(new Set());
             clearSelection();
             await loadData();
-            alert(`Categorized ${resolved} transaction${resolved === 1 ? '' : 's'}`);
+            notify('success', `Categorized ${resolved} transaction${resolved === 1 ? '' : 's'}`);
         } catch (error) {
             console.error('Error accepting AI suggestions:', error);
             await loadData();
-            alert('Some suggestions could not be applied. Please review the remaining merchants.');
+            notify('error', 'Some suggestions could not be applied. Please review the remaining merchants.');
         } finally {
             setIsProcessing(false);
         }
@@ -175,6 +190,16 @@ const CategorizationReview: React.FC = () => {
 
     return (
         <div className="animate-fade-in max-w-7xl mx-auto">
+            <ToastStack toasts={toasts} onDismiss={dismissToast} />
+            {confirmCount !== null && (
+                <ConfirmDialog
+                    title="Apply AI suggestions?"
+                    message={`Apply the AI suggestion to ${confirmCount} merchant${confirmCount === 1 ? '' : 's'}? Each one will be categorized now and on future imports.`}
+                    confirmLabel="Apply"
+                    onConfirm={handleAcceptChecked}
+                    onCancel={() => setConfirmCount(null)}
+                />
+            )}
             <div className="flex items-center justify-between mb-6">
                 <div>
                     <h2 className="text-3xl font-bold text-gray-900">Transaction Categorization Review</h2>
@@ -188,7 +213,7 @@ const CategorizationReview: React.FC = () => {
                         disabled={isProcessing}
                         className="flex items-center gap-2 px-3 py-2 border border-purple-300 rounded-lg text-sm font-medium text-purple-700 hover:bg-purple-50 disabled:opacity-50"
                     >
-                        <Sparkles className="w-4 h-4" />
+                        {isProcessing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
                         Suggest with AI
                     </button>
                     <button
@@ -196,7 +221,7 @@ const CategorizationReview: React.FC = () => {
                         disabled={isProcessing}
                         className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
                     >
-                        <RefreshCw className="w-4 h-4" />
+                        <RefreshCw className={`w-4 h-4 ${isProcessing ? 'animate-spin' : ''}`} />
                         Re-run rules
                     </button>
                     <div className="text-right">
@@ -235,7 +260,7 @@ const CategorizationReview: React.FC = () => {
                                             Tick all AI-suggested
                                         </button>
                                         <button
-                                            onClick={handleAcceptChecked}
+                                            onClick={requestAcceptChecked}
                                             disabled={checkedKeys.size === 0 || isProcessing}
                                             className="text-xs px-2 py-1 rounded bg-purple-600 text-white disabled:opacity-40"
                                         >
@@ -414,7 +439,7 @@ const CategorizationReview: React.FC = () => {
                                             }`}
                                         >
                                             {isProcessing
-                                                ? 'Processing...'
+                                                ? <span className="inline-flex items-center justify-center gap-2"><Loader2 className="w-4 h-4 animate-spin" />Categorizing...</span>
                                                 : `Categorize ${selectedGroup.count} transaction${selectedGroup.count === 1 ? '' : 's'}`}
                                         </button>
                                         <button
