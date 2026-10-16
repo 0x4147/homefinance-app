@@ -76,7 +76,9 @@ export function CategoryCell({ transactionId, entity, category, categories, onSe
 
     const matches = useMemo(() => {
         const needle = query.trim().toLowerCase();
-        return categories.filter(c => c.name.toLowerCase().includes(needle));
+        return categories
+            .filter(c => c.name.toLowerCase().includes(needle))
+            .sort((a, b) => a.name.localeCompare(b.name));
     }, [categories, query]);
 
     if (transactionId === undefined) {

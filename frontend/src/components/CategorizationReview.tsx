@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { CheckCircle, AlertCircle, DollarSign, Building, RefreshCw, Sparkles, Calendar, Loader2 } from 'lucide-react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { CheckCircle, AlertCircle, DollarSign, Building, RefreshCw, Sparkles, Calendar, Loader2, Search } from 'lucide-react';
 import { apiService, type Category, type ReviewDirection, type ReviewGroup } from '../services/api';
 import { ToastStack, type ToastMessage } from './Toast';
 import ConfirmDialog from './ConfirmDialog';
@@ -14,6 +14,26 @@ const CategorizationReview: React.FC = () => {
     const [checkedKeys, setCheckedKeys] = useState<Set<string>>(new Set());
     const [toasts, setToasts] = useState<ToastMessage[]>([]);
     const [confirmCount, setConfirmCount] = useState<number | null>(null);
+    const [search, setSearch] = useState('');
+
+    const sortedCategories = useMemo(
+        () => [...categories].sort((a, b) => a.name.localeCompare(b.name)),
+        [categories]);
+
+    const [categorySearch, setCategorySearch] = useState('');
+
+    const matchingCategories = useMemo(() => {
+        const needle = categorySearch.trim().toLowerCase();
+        return sortedCategories.filter((c) => c.name.toLowerCase().includes(needle));
+    }, [sortedCategories, categorySearch]);
+
+    const visibleGroups = useMemo(() => {
+        const needle = search.trim().toLowerCase();
+        if (!needle) return groups;
+        return groups.filter((group) =>
+            group.merchant.toLowerCase().includes(needle)
+            || group.suggestions.some((s) => s.toLowerCase().includes(needle)));
+    }, [groups, search]);
 
     const dismissToast = useCallback((id: number) => {
         setToasts((prev) => prev.filter((t) => t.id !== id));
@@ -47,6 +67,7 @@ const CategorizationReview: React.FC = () => {
     const clearSelection = () => {
         setSelectedGroup(null);
         setSelectedCategory('');
+        setCategorySearch('');
     };
 
     // Saving a rule can clear other groups too (name variants of the same merchant), so reload.
@@ -268,14 +289,28 @@ const CategorizationReview: React.FC = () => {
                                         </button>
                                     </div>
                                 )}
+                                <div className="relative mt-3">
+                                    <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" aria-hidden="true" />
+                                    <input
+                                        value={search}
+                                        onChange={(e) => setSearch(e.target.value)}
+                                        placeholder="Filter by merchant or suggested category"
+                                        aria-label="Filter merchants"
+                                        className="w-full rounded-lg border border-gray-200 bg-gray-50 py-2 pl-9 pr-3 text-sm text-gray-900 placeholder:text-gray-400 focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                                    />
+                                </div>
                             </div>
                             <div className="divide-y divide-gray-200 max-h-[32rem] overflow-y-auto">
-                                {groups.map((group) => (
+                                {visibleGroups.length === 0 && (
+                                    <div className="p-8 text-center text-sm text-gray-500">No merchants match “{search}”</div>
+                                )}
+                                {visibleGroups.map((group) => (
                                     <div
                                         key={group.key}
                                         onClick={() => {
                                             setSelectedGroup(group);
                                             setSelectedCategory(group.suggestions[0] ?? '');
+                                            setCategorySearch('');
                                         }}
                                         className={`p-4 cursor-pointer transition-colors duration-200 hover:bg-gray-50 ${
                                             selectedGroup?.key === group.key ? 'bg-blue-50 border-r-4 border-blue-500' : ''
@@ -414,18 +449,39 @@ const CategorizationReview: React.FC = () => {
                                         <label className="block text-sm font-medium text-gray-700 mb-2">
                                             Select Category
                                         </label>
-                                        <select
-                                            value={selectedCategory}
-                                            onChange={(e) => setSelectedCategory(e.target.value)}
-                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                        >
-                                            <option value="">Choose a category...</option>
-                                            {categories.map((category) => (
-                                                <option key={category.categoryId} value={category.name}>
-                                                    {category.name}
-                                                </option>
+                                        <div className="relative mb-2">
+                                            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" aria-hidden="true" />
+                                            <input
+                                                value={categorySearch}
+                                                onChange={(e) => setCategorySearch(e.target.value)}
+                                                onKeyDown={(e) => {
+                                                    if (e.key === 'Enter' && matchingCategories.length > 0) {
+                                                        setSelectedCategory(matchingCategories[0].name);
+                                                    }
+                                                }}
+                                                placeholder="Search categories"
+                                                aria-label="Search categories"
+                                                className="w-full rounded-lg border border-gray-200 bg-gray-50 py-2 pl-9 pr-3 text-sm text-gray-900 placeholder:text-gray-400 focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                                            />
+                                        </div>
+                                        <ul role="listbox" aria-label="Categories" className="max-h-48 overflow-y-auto rounded-lg border border-gray-200 py-1">
+                                            {matchingCategories.length === 0 && (
+                                                <li className="px-3 py-2 text-sm text-gray-500">No matching category</li>
+                                            )}
+                                            {matchingCategories.map((category) => (
+                                                <li key={category.categoryId} role="option" aria-selected={category.name === selectedCategory}>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setSelectedCategory(category.name)}
+                                                        className={`w-full px-3 py-1.5 text-left text-sm hover:bg-blue-50 ${
+                                                            category.name === selectedCategory ? 'bg-blue-50 font-semibold text-blue-700' : 'text-gray-900'
+                                                        }`}
+                                                    >
+                                                        {category.name}
+                                                    </button>
+                                                </li>
                                             ))}
-                                        </select>
+                                        </ul>
                                     </div>
 
                                     <div className="space-y-2">
