@@ -3,6 +3,8 @@ package ca.homefinance.service;
 import ca.homefinance.dto.BalanceLineDto;
 import ca.homefinance.dto.MonthlyBalanceResponseDto;
 import ca.homefinance.dto.TransactionDto;
+import ca.homefinance.dto.TransactionScope;
+import ca.homefinance.dto.TransactionSummary;
 import ca.homefinance.entity.Account;
 import ca.homefinance.entity.Category;
 import ca.homefinance.entity.Person;
@@ -278,6 +280,108 @@ class TransactionServiceTest {
         assertEquals(0, BigDecimal.ZERO.compareTo(result.getAsankaPaid()));
         assertEquals(0, new BigDecimal("150.0").compareTo(result.getDivyaPaid()));
         assertEquals("Asanka", result.getWhoOwes());
+    }
+
+    @Test
+    void getMonthlyBalance_PersonalPurchaseOnSharedCard_OwnerOwesAllOfIt() {
+        // Divya settles the card: $100 shared + $60 that is entirely Asanka's.
+        // Asanka owes half the shared $100 plus all of his $60.
+        Transaction personal = spend(2, "60.00", cibc, asanka);
+        personal.setOwner(asanka);
+        stubBalance(spend(1, "100.00", cibc, asanka), personal);
+
+        MonthlyBalanceResponseDto result = transactionService.getMonthlyBalance(1, 2024);
+
+        assertEquals(0, new BigDecimal("110.0").compareTo(result.getBalanceAmount()));
+        assertEquals(0, new BigDecimal("160.00").compareTo(result.getDivyaPaid()));
+        assertEquals("Asanka", result.getWhoOwes());
+    }
+
+    @Test
+    void getMonthlyBalance_PersonalPurchaseOwnedByTheSettler_ChangesNothing() {
+        Transaction personal = spend(2, "60.00", cibc, asanka);
+        personal.setOwner(divya);
+        stubBalance(spend(1, "100.00", cibc, asanka), personal);
+
+        MonthlyBalanceResponseDto result = transactionService.getMonthlyBalance(1, 2024);
+
+        assertEquals(0, new BigDecimal("50.0").compareTo(result.getBalanceAmount()));
+        assertEquals("Asanka", result.getWhoOwes());
+    }
+
+    /** One of each: shared (counted, split), excluded, owned by one person, and in a category that doesn't count. */
+    private void stubMixedTransactions() {
+        Transaction shared = spend(1, "10.00", cibc, asanka);
+        Transaction excluded = spend(2, "20.00", cibc, asanka);
+        excluded.setShared(false);
+        Transaction owned = spend(3, "30.00", cibc, asanka);
+        owned.setOwner(asanka);
+        Transaction notCounted = transaction(4, "-40.00", cibc, asanka,
+                category(2, "Card Payment", Category.CategoryKind.TRANSFER, false));
+        when(transactionRepository.findByDateBetween(any(LocalDate.class), any(LocalDate.class)))
+                .thenReturn(Arrays.asList(shared, excluded, owned, notCounted));
+    }
+
+    @Test
+    void getExpensesByCategory_OnlyIncludesTheSharedFinances() {
+        stubMixedTransactions();
+
+        TransactionSummary result = transactionService.getExpensesByCategory(
+                LocalDate.of(2024, 1, 1), LocalDate.of(2024, 1, 31));
+
+        assertEquals(1, result.getTotals().size());
+        assertEquals(0, new BigDecimal("10.00").compareTo(result.getTotals().get("Test Category")));
+    }
+
+    @Test
+    void getExpensesByMonth_OnlyIncludesTheSharedFinances() {
+        stubMixedTransactions();
+
+        TransactionSummary result = transactionService.getExpensesByMonth(
+                java.time.YearMonth.of(2024, 1), java.time.YearMonth.of(2024, 1));
+
+        assertEquals(0, new BigDecimal("10.00").compareTo(result.getTotals().get("2024-01")));
+    }
+
+    @Test
+    void getTransactionDtosByDateRange_SharedScopeHidesEverythingButSharedFinances() {
+        stubMixedTransactions();
+
+        List<TransactionDto> shared = transactionService.getTransactionDtosByDateRange(
+                LocalDate.of(2024, 1, 1), LocalDate.of(2024, 1, 31), TransactionScope.SHARED);
+        List<TransactionDto> all = transactionService.getTransactionDtosByDateRange(
+                LocalDate.of(2024, 1, 1), LocalDate.of(2024, 1, 31));
+
+        assertEquals(1, shared.size());
+        assertEquals(1, shared.get(0).getTransactionId());
+        assertEquals(4, all.size());
+    }
+
+    @Test
+    void setOwner_AssignsAndClearsTheOwner() {
+        Transaction tx = spend(7, "10.00", cibc, asanka);
+        when(transactionRepository.findById(7)).thenReturn(Optional.of(tx));
+        when(transactionRepository.save(any(Transaction.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(personRepository.findByCode("ASANKA")).thenReturn(Optional.of(asanka));
+
+        assertEquals("ASANKA", transactionService.setOwner(7, "asanka").getOwner());
+        assertSame(asanka, tx.getOwner());
+
+        assertNull(transactionService.setOwner(7, null).getOwner());
+        assertNull(tx.getOwner());
+    }
+
+    @Test
+    void setOwner_UnknownPerson_ReturnsBadRequest() {
+        Transaction tx = spend(7, "10.00", cibc, asanka);
+        when(transactionRepository.findById(7)).thenReturn(Optional.of(tx));
+        when(personRepository.findByCode("NOBODY")).thenReturn(Optional.empty());
+
+        ResponseStatusException e = assertThrows(ResponseStatusException.class,
+                () -> transactionService.setOwner(7, "nobody"));
+
+        assertEquals(HttpStatus.BAD_REQUEST, e.getStatusCode());
+        verify(transactionRepository, never()).save(any());
     }
 
     @Test

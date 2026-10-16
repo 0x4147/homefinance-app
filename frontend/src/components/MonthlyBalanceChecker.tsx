@@ -5,6 +5,7 @@ import { CategoryCell, CorrectionToast } from './CategoryCell';
 import { useCategoryCorrection } from './useCategoryCorrection';
 import { BalanceToggle, BalanceToast } from './BalanceToggle';
 import { useBalanceToggle } from './useBalanceToggle';
+import { OwnerSelect } from './OwnerSelect';
 import type { BalanceLine, MonthlyBalanceResponseDto, SettlementStatus } from '../services/api';
 
 type Person = 'ASANKA' | 'DIVYA';
@@ -172,6 +173,13 @@ const TransactionsDrawer = ({ month, year, person, total, onClose, onCategoryCha
                                                     line.transaction.transactionId!, line.transaction.entity,
                                                     balanceToggle.sharedOf(line.transaction.transactionId, line.transaction.shared ?? true), next)}
                                             />
+                                            <span className="ml-2">
+                                                <OwnerSelect
+                                                    transactionId={line.transaction.transactionId}
+                                                    owner={line.transaction.owner}
+                                                    onChanged={handleCategoryChanged}
+                                                />
+                                            </span>
                                         </div>
                                     </div>
                                     {line.transaction.countsInBalance === false ? (

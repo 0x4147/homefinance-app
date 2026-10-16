@@ -245,6 +245,15 @@ public class TransactionCategorizationService {
             String key = brandKey(pending.getMerchant());
             byKey.computeIfAbsent(key.isBlank() ? normalize(pending.getMerchant()) : key, k -> new ArrayList<>()).add(pending);
         }
+        Map<Integer, String> accountByPending = new HashMap<>();
+        for (List<UncategorizedTransaction> items : byKey.values()) {
+            for (UncategorizedTransaction item : items) accountByPending.put(item.getId(), null);
+        }
+        if (!accountByPending.isEmpty()) {
+            for (Transaction linked : transactionRepository.findByUncategorizedTransactionIds(accountByPending.keySet())) {
+                accountByPending.put(linked.getUncategorizedTransaction().getId(), linked.getAccount().getCode());
+            }
+        }
         List<MerchantRule> rules = rules();
         return byKey.entrySet().stream()
                 .map(entry -> {
@@ -276,9 +285,12 @@ public class TransactionCategorizationService {
                                             Comparator.nullsLast(Comparator.reverseOrder())))
                                     .map(item -> new ReviewGroup.Line(item.getId(), item.getDate(),
                                             item.getMerchant(), item.getAmount(),
-                                            ReviewGroup.Direction.of(item.getAmount())))
+                                            ReviewGroup.Direction.of(item.getAmount()),
+                                            accountByPending.get(item.getId())))
                                     .toList(),
-                            groupDirection(items));
+                            groupDirection(items),
+                            items.stream().map(item -> accountByPending.get(item.getId()))
+                                    .filter(Objects::nonNull).distinct().sorted().toList());
                 })
                 .sorted(Comparator.comparing((ReviewGroup group) -> group.total().abs()).reversed())
                 .toList();

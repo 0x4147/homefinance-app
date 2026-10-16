@@ -5,6 +5,7 @@ import { CategoryCell, CorrectionToast } from './CategoryCell';
 import { useCategoryCorrection } from './useCategoryCorrection';
 import { BalanceToggle, BalanceToast } from './BalanceToggle';
 import { useBalanceToggle } from './useBalanceToggle';
+import { OwnerSelect } from './OwnerSelect';
 
 type SortKey = 'date' | 'entity' | 'amount' | 'account' | 'category';
 type SortConfig = { key: SortKey; direction: 'asc' | 'desc' };
@@ -18,6 +19,7 @@ interface Row {
     account: string;
     category: string;
     shared: boolean;
+    owner?: string | null;
 }
 
 const currency = new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD' });
@@ -46,6 +48,7 @@ function toRow(t: TransactionDto | Transaction, idx: number): Row {
         account: tx.account || tx.sourceAccount || '',
         category: typeof tx.category === 'string' ? tx.category : (tx.category?.name || ''),
         shared: tx.shared ?? true,
+        owner: tx.owner,
     };
 }
 
@@ -233,6 +236,7 @@ export function TransactionsModal({
                                                     if (r.id !== undefined) balance.setShared(r.id, r.entity, balance.sharedOf(r.id, r.shared), next);
                                                 }}
                                             />
+                                            <span className="ml-2"><OwnerSelect transactionId={r.id} owner={r.owner} /></span>
                                         </td>
                                         <td className={`whitespace-nowrap px-6 py-3 text-right font-semibold tabular-nums ${r.amount >= 0 ? 'text-emerald-600' : 'text-gray-900'}`}>
                                             {r.amount >= 0 ? '+' : '−'}{currency.format(Math.abs(r.amount))}

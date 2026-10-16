@@ -7,6 +7,7 @@ import org.springframework.stereotype.Repository;
 import org.springframework.data.jpa.repository.JpaRepository;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.Collection;
 import java.util.List;
 
 @Repository
@@ -15,6 +16,10 @@ public interface TransactionRepository extends JpaRepository<Transaction, Intege
     List<Transaction> findByDateBetween(LocalDate startDate, LocalDate endDate);
 
     List<Transaction> findByUncategorizedTransaction_Id(Integer id);
+
+    /** The transactions behind pending reviews, with their accounts, so the review can show where each came from. */
+    @Query("SELECT t FROM Transaction t JOIN FETCH t.account WHERE t.uncategorizedTransaction.id IN :ids")
+    List<Transaction> findByUncategorizedTransactionIds(@Param("ids") Collection<Integer> ids);
 
     long countByAccount_CodeAndDateAndEntityAndAmount(String accountCode, LocalDate date, String entity, BigDecimal amount);
 

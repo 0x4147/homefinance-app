@@ -18,6 +18,7 @@ import { CategoryCell, CorrectionToast } from './components/CategoryCell';
 import { useCategoryCorrection } from './components/useCategoryCorrection';
 import { BalanceToggle, BalanceToast } from './components/BalanceToggle';
 import { useBalanceToggle } from './components/useBalanceToggle';
+import { OwnerSelect } from './components/OwnerSelect';
 import { LargestTransactionsCard, RecurringChargesCard } from './components/SpendingBehaviourCards';
 import { TransactionsModal } from './components/TransactionsModal';
 
@@ -126,9 +127,9 @@ const Dashboard = () => {
                     setTrendDetails(trendResponse.details || {});
                 }
 
-                // Raw transactions feed the largest-purchases and recurring-charges tiles
+                // Raw transactions feed the largest-purchases and recurring-charges tiles (shared finances only, like the charts)
                 const fmtDay = (d: Date) => `${fmtKey(d)}-${String(d.getDate()).padStart(2, '0')}`;
-                const yearTxs = await apiService.getTransactionsByDateRange(fmtDay(new Date(now.getFullYear(), now.getMonth() - 11, 1)), fmtDay(now));
+                const yearTxs = await apiService.getTransactionsByDateRange(fmtDay(new Date(now.getFullYear(), now.getMonth() - 11, 1)), fmtDay(now), 'SHARED');
                 setYearTransactions(yearTxs);
                 setRecentTransactions(yearTxs.filter(t => t.date >= startDate));
             } catch (error) {
@@ -419,6 +420,12 @@ const ViewTransactions = () => {
                                                         transaction.transactionId!, transaction.entity,
                                                         balance.sharedOf(transaction.transactionId, transaction.shared ?? true), next)}
                                                 />
+                                                <span className="ml-2">
+                                                    <OwnerSelect
+                                                        transactionId={transaction.transactionId}
+                                                        owner={transaction.owner}
+                                                    />
+                                                </span>
                                             </td>
                                         </tr>
                                     ))

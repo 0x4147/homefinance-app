@@ -191,6 +191,17 @@ const CategorizationReview: React.FC = () => {
         );
     };
 
+    // Shows where the transactions came from; a purchase on a shared card may really be personal, so this matters when categorizing.
+    const AccountBadges = ({ accounts }: { accounts: string[] }) => (
+        <>
+            {accounts.map((account) => (
+                <span key={account} className="text-xs px-2 py-0.5 rounded-full shrink-0 bg-blue-50 text-blue-700 font-medium">
+                    {account}
+                </span>
+            ))}
+        </>
+    );
+
     const formatDateRange = (group: ReviewGroup) => {
         if (!group.firstDate || !group.lastDate) return null;
         return group.firstDate === group.lastDate
@@ -334,6 +345,7 @@ const CategorizationReview: React.FC = () => {
                                                         {group.merchant}
                                                     </span>
                                                     <DirectionBadge direction={group.direction} />
+                                                    <AccountBadges accounts={group.accounts} />
                                                 </div>
                                                 <div className="flex items-center gap-4 text-sm text-gray-500">
                                                     <span>{group.count} transaction{group.count === 1 ? '' : 's'}</span>
@@ -390,6 +402,9 @@ const CategorizationReview: React.FC = () => {
                                                 <span className="text-gray-600">Total:</span>
                                                 <span className="ml-2 font-medium">{formatCurrency(selectedGroup.total)}</span>
                                                 <span className="ml-2"><DirectionBadge direction={selectedGroup.direction} /></span>
+                                                {selectedGroup.accounts.length > 0 && (
+                                                    <span className="ml-2 inline-flex gap-1"><AccountBadges accounts={selectedGroup.accounts} /></span>
+                                                )}
                                             </div>
                                             {formatDateRange(selectedGroup) && (
                                                 <div>
@@ -409,7 +424,7 @@ const CategorizationReview: React.FC = () => {
                                                 {selectedGroup.transactions.map((tx) => (
                                                     <li key={tx.id} className="flex items-center justify-between gap-3 px-3 py-2">
                                                         <div className="min-w-0">
-                                                            <div className="text-gray-500 text-xs">{formatDate(tx.date)}</div>
+                                                            <div className="text-gray-500 text-xs">{formatDate(tx.date)}{tx.account ? ` · ${tx.account}` : ''}</div>
                                                             <div className="truncate text-gray-800" title={tx.merchant}>{tx.merchant}</div>
                                                         </div>
                                                         <span className={`font-medium shrink-0 ${tx.direction === 'CREDIT' ? 'text-green-700' : 'text-gray-900'}`}>

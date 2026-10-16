@@ -19,12 +19,14 @@ import java.util.List;
  * @param lastDate     date of the latest transaction in the group, or null if none is dated
  * @param transactions the individual pending transactions, newest first
  * @param direction    DEBIT or CREDIT when every transaction agrees, MIXED otherwise
+ * @param accounts     codes of the accounts (CIBC, AMEX, ASANKA, DIVYA) the transactions came from, sorted
  */
 public record ReviewGroup(String key, String merchant, int count, BigDecimal total,
                           List<String> suggestions, List<Integer> ids,
                           String aiSuggestion, Double aiConfidence,
                           LocalDate firstDate, LocalDate lastDate,
-                          List<Line> transactions, Direction direction) {
+                          List<Line> transactions, Direction direction,
+                          List<String> accounts) {
 
     /** Which way the money moved: a debit is money out, a credit is money in (e.g. a refund). */
     public enum Direction {
@@ -36,5 +38,6 @@ public record ReviewGroup(String key, String merchant, int count, BigDecimal tot
     }
 
     /** One pending transaction within a group. */
-    public record Line(Integer id, LocalDate date, String merchant, BigDecimal amount, Direction direction) {}
+    public record Line(Integer id, LocalDate date, String merchant, BigDecimal amount, Direction direction,
+                       String account) {}
 }

@@ -25,6 +25,7 @@ export interface Transaction {
     category: string;
     person: string;
     shared?: boolean;
+    owner?: string | null;
     uncategorizedTransaction?: { id: number } | null;
 }
 
@@ -42,6 +43,8 @@ export interface TransactionDto {
     shared?: boolean;
     /** Whether it currently counts toward the balance (shared, and in a category that counts). */
     countsInBalance?: boolean;
+    /** Code of the person who owes all of it (ASANKA / DIVYA); null when it is split between both. */
+    owner?: string | null;
 }
 
 export interface TransactionSummary {
@@ -113,6 +116,8 @@ export interface ReviewGroup {
     lastDate?: string | null;
     transactions: ReviewTransaction[];
     direction: ReviewDirection;
+    /** Accounts the group's transactions came from, sorted. */
+    accounts: string[];
 }
 
 export type ReviewDirection = 'DEBIT' | 'CREDIT' | 'MIXED';
@@ -123,6 +128,8 @@ export interface ReviewTransaction {
     merchant: string;
     amount: number;
     direction: ReviewDirection;
+    /** Code of the account the transaction came from (CIBC, AMEX, ASANKA, DIVYA). */
+    account?: string | null;
 }
 
 export interface Category {
@@ -204,11 +211,12 @@ class ApiService {
     }
 
     // Get transactions by date range
-    async getTransactionsByDateRange(startDate: string, endDate: string): Promise<TransactionDto[]> {
-        log.info(`Fetching transactions from ${startDate} to ${endDate}`);
+    async getTransactionsByDateRange(startDate: string, endDate: string, scope: 'ALL' | 'SHARED' = 'ALL'): Promise<TransactionDto[]> {
+        log.info(`Fetching ${scope} transactions from ${startDate} to ${endDate}`);
         const params = new URLSearchParams({
             start: startDate,
             end: endDate,
+            scope,
         });
         return this.makeRequest<TransactionDto[]>(`/transaction/getTransactionsByDateRange?${params}`);
     }
@@ -375,6 +383,14 @@ class ApiService {
         return this.makeRequest<TransactionDto>(`/transaction/${transactionId}/shared`, {
             method: 'PUT',
             body: JSON.stringify({ shared }),
+        });
+    }
+
+    async setTransactionOwner(transactionId: number, owner: string | null): Promise<TransactionDto> {
+        log.info(`Setting transaction ${transactionId} owner=${owner}`);
+        return this.makeRequest<TransactionDto>(`/transaction/${transactionId}/owner`, {
+            method: 'PUT',
+            body: JSON.stringify({ owner }),
         });
     }
 

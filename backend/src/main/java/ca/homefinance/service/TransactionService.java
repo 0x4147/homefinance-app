@@ -3,6 +3,7 @@ package ca.homefinance.service;
 import ca.homefinance.dto.BalanceLineDto;
 import ca.homefinance.dto.MonthlyBalanceResponseDto;
 import ca.homefinance.dto.TransactionDto;
+import ca.homefinance.dto.TransactionScope;
 import ca.homefinance.dto.TransactionSummary;
 import ca.homefinance.entity.Category;
 import ca.homefinance.entity.Transaction;
@@ -142,7 +143,12 @@ public class TransactionService {
     }
 
     public List<TransactionDto> getTransactionDtosByDateRange(LocalDate startDate, LocalDate endDate) {
+        return getTransactionDtosByDateRange(startDate, endDate, TransactionScope.ALL);
+    }
+
+    public List<TransactionDto> getTransactionDtosByDateRange(LocalDate startDate, LocalDate endDate, TransactionScope scope) {
         return getTransactionsByDateRange(startDate, endDate).stream()
+                .filter(tx -> scope == TransactionScope.ALL || tx.isSharedExpense())
                 .map(this::toDto)
                 .collect(Collectors.toList());
     }
@@ -192,9 +198,14 @@ public class TransactionService {
         BigDecimal totalExpensesMinusIncomeAsanka = paidBy(transactions, ASANKA);
         BigDecimal totalExpensesMinusIncomeDivya = paidBy(transactions, DIVYA);
 
+        // A transaction owned by one person (a personal purchase on a shared card) is theirs entirely, so it is
+        // taken out of what the payer is credited with and the other person's half; only the rest is split.
+        BigDecimal sharedPaidAsanka = totalExpensesMinusIncomeAsanka.subtract(ownedBy(transactions, ASANKA));
+        BigDecimal sharedPaidDivya = totalExpensesMinusIncomeDivya.subtract(ownedBy(transactions, DIVYA));
+
         // if minus value they owe the other person, if plus the other person owes.
-        BigDecimal amountDividedByTwoAsanka = totalExpensesMinusIncomeAsanka.divide(BigDecimal.valueOf(2), RoundingMode.HALF_UP);
-        BigDecimal amountDividedByTwoDivya = totalExpensesMinusIncomeDivya.divide(BigDecimal.valueOf(2), RoundingMode.HALF_UP);
+        BigDecimal amountDividedByTwoAsanka = sharedPaidAsanka.divide(BigDecimal.valueOf(2), RoundingMode.HALF_UP);
+        BigDecimal amountDividedByTwoDivya = sharedPaidDivya.divide(BigDecimal.valueOf(2), RoundingMode.HALF_UP);
         BigDecimal difference = amountDividedByTwoDivya.subtract(amountDividedByTwoAsanka);
 
         MonthlyBalanceResponseDto monthlyBalanceResponseDto = new MonthlyBalanceResponseDto();
@@ -221,9 +232,17 @@ public class TransactionService {
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
+    /** What the person owes outright: the counted transactions that are theirs alone, whoever paid. */
+    private static BigDecimal ownedBy(List<Transaction> transactions, String owner) {
+        return transactions.stream()
+                .filter(tx -> tx.getOwner() != null && tx.getOwner().getCode().equals(owner))
+                .map(Transaction::balanceContribution)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+
     public TransactionSummary getExpensesByCategory(LocalDate startDate, LocalDate endDate) {
         try {
-            List<Transaction> transactions = transactionRepository.findByDateBetween(startDate, endDate);
+            List<Transaction> transactions = sharedTransactions(startDate, endDate);
             return summarizeExpenses(transactions,
                     tx -> tx.getCategory() == null ? "Unknown" : tx.getCategory().getName(),
                     HashMap::new, HashMap::new);
@@ -239,7 +258,7 @@ public class TransactionService {
 
     public TransactionSummary getExpensesByEntity(LocalDate startDate, LocalDate endDate) {
         try {
-            List<Transaction> transactions = transactionRepository.findByDateBetween(startDate, endDate);
+            List<Transaction> transactions = sharedTransactions(startDate, endDate);
             return summarizeExpenses(transactions, Transaction::getEntity, HashMap::new, HashMap::new);
         } catch (Exception e) {
             log.error("error preparing entities", e);
@@ -254,7 +273,7 @@ public class TransactionService {
     public TransactionSummary getExpensesByMonth(YearMonth startMonth, YearMonth endMonth) {
         LocalDate startDate = startMonth.atDay(1);
         LocalDate endDate = endMonth.atEndOfMonth();
-        List<Transaction> transactions = transactionRepository.findByDateBetween(startDate, endDate);
+        List<Transaction> transactions = sharedTransactions(startDate, endDate);
         return summarizeExpenses(transactions,
                 tx -> YearMonth.from(tx.getDate()).toString(),
                 () -> new TreeMap<>(Comparator.reverseOrder()),
@@ -273,7 +292,8 @@ public class TransactionService {
                 tx.getCategory() != null ? tx.getCategory().getName() : "Unknown",
                 tx.getPerson() != null ? tx.getPerson().getName() : "",
                 tx.isShared(),
-                tx.countsInBalance()
+                tx.countsInBalance(),
+                tx.getOwner() != null ? tx.getOwner().getCode() : null
         );
     }
 
@@ -283,6 +303,24 @@ public class TransactionService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Transaction not found: " + transactionId));
         transaction.setShared(shared);
         return toDto(transactionRepository.save(transaction));
+    }
+
+    /** Makes one person owe all of a transaction, or null to split it between both. */
+    public TransactionDto setOwner(Integer transactionId, String ownerCode) {
+        Transaction transaction = transactionRepository.findById(transactionId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Transaction not found: " + transactionId));
+        transaction.setOwner(ownerCode == null || ownerCode.isBlank() ? null
+                : personRepository.findByCode(ownerCode.toUpperCase())
+                        .filter(p -> p.getCode().equals(ASANKA) || p.getCode().equals(DIVYA))
+                        .orElseThrow(() -> badRequest("Invalid owner: " + ownerCode)));
+        return toDto(transactionRepository.save(transaction));
+    }
+
+    /** The shared finances in a date range: what the dashboard and spending insights are made of. */
+    private List<Transaction> sharedTransactions(LocalDate startDate, LocalDate endDate) {
+        return transactionRepository.findByDateBetween(startDate, endDate).stream()
+                .filter(Transaction::isSharedExpense)
+                .toList();
     }
 
     private TransactionSummary summarizeExpenses(List<Transaction> transactions,

@@ -56,6 +56,14 @@ public class Transaction {
     @Column(name = "shared", nullable = false)
     private boolean shared = true;
 
+    /**
+     * Who this transaction is really for. Null means it is split between both people; otherwise that person
+     * owes all of it, even though {@link Account#getPayer()} settled it (a personal purchase on a shared card).
+     */
+    @ManyToOne
+    @JoinColumn(name = "owner_person_id", referencedColumnName = "person_id")
+    private Person owner;
+
     /** Display label derived from the category's kind and the sign of the amount; never stored. */
     public enum TransactionType {
         EXPENSE, REFUND, INCOME, TRANSFER
@@ -77,6 +85,14 @@ public class Transaction {
     /** Takes part in the shared-expense balance: shared, and categorized in a category that counts. */
     public boolean countsInBalance() {
         return shared && category != null && category.isInBalance();
+    }
+
+    /**
+     * Part of the shared finances: it counts in the balance and is split between both people, not owed
+     * entirely by one. This is what the shared dashboard and insights are built from.
+     */
+    public boolean isSharedExpense() {
+        return countsInBalance() && owner == null;
     }
 
     /** What this transaction adds to its payer's "paid" figure: spending is positive, income/refunds negative. */

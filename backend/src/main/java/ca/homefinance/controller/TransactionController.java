@@ -3,6 +3,7 @@ package ca.homefinance.controller;
 import ca.homefinance.dto.BalanceLineDto;
 import ca.homefinance.dto.MonthlyBalanceResponseDto;
 import ca.homefinance.dto.TransactionDto;
+import ca.homefinance.dto.TransactionScope;
 import ca.homefinance.dto.TransactionSummary;
 import ca.homefinance.entity.Transaction;
 import ca.homefinance.service.SettlementService;
@@ -30,8 +31,12 @@ public class TransactionController {
     }
 
     @GetMapping("/getTransactionsByDateRange")
-    public ResponseEntity<List<TransactionDto>> getTransactionsByDateRange(@RequestParam LocalDate start, @RequestParam LocalDate end) {
-        return ResponseEntity.ok(transactionService.getTransactionDtosByDateRange(start, end));
+    public ResponseEntity<List<TransactionDto>> getTransactionsByDateRange(@RequestParam LocalDate start, @RequestParam LocalDate end,
+                                                                            @RequestParam(required = false) String scope) {
+        TransactionScope parsed = TransactionScope.parse(scope);
+        return ResponseEntity.ok(parsed == TransactionScope.ALL
+                ? transactionService.getTransactionDtosByDateRange(start, end)
+                : transactionService.getTransactionDtosByDateRange(start, end, parsed));
     }
 
     @PostMapping("/saveTransaction")
@@ -47,6 +52,15 @@ public class TransactionController {
     }
 
     public record SharedRequest(boolean shared) {}
+
+    /** Body {"owner": "ASANKA"} makes that person owe all of it; {"owner": null} splits it between both again. */
+    @PutMapping("/{transactionId}/owner")
+    public ResponseEntity<TransactionDto> setOwner(@PathVariable Integer transactionId,
+                                                   @RequestBody OwnerRequest request) {
+        return ResponseEntity.ok(transactionService.setOwner(transactionId, request.owner()));
+    }
+
+    public record OwnerRequest(String owner) {}
 
     @GetMapping("/getMonthlyBalance")
     public ResponseEntity<MonthlyBalanceResponseDto> getMonthlyBalance(@RequestParam String month, @RequestParam String year) {
