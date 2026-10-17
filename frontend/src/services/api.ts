@@ -26,6 +26,8 @@ export interface Transaction {
     person: string;
     shared?: boolean;
     owner?: string | null;
+    tripId?: number | null;
+    tripName?: string | null;
     uncategorizedTransaction?: { id: number } | null;
 }
 
@@ -45,6 +47,33 @@ export interface TransactionDto {
     countsInBalance?: boolean;
     /** Code of the person who owes all of it (ASANKA / DIVYA); null when it is split between both. */
     owner?: string | null;
+    /** The trip it is tagged with, if any. */
+    tripId?: number | null;
+    tripName?: string | null;
+}
+
+export interface Trip {
+    tripId?: number;
+    name: string;
+    startDate: string;
+    endDate: string;
+    /** Optional spending target. */
+    budget?: number | null;
+    /** Read-only: what the trip has cost so far; set by the trip list and summary, ignored when saving. */
+    total?: number | null;
+}
+
+export interface TripSummary {
+    trip: Trip;
+    /** Spending is positive; refunds reduce it. Only transactions that count in the balance are included. */
+    total: number;
+    byCategory: Record<string, number>;
+    byDay: Record<string, number>;
+    byPayer: Record<string, number>;
+    /** Budget minus total; null when the trip has no budget. */
+    budgetRemaining: number | null;
+    /** Tagged transactions left out of the total (unshared or uncategorized). */
+    uncountedTransactions: number;
 }
 
 export interface TransactionSummary {
@@ -391,6 +420,66 @@ class ApiService {
         return this.makeRequest<TransactionDto>(`/transaction/${transactionId}/owner`, {
             method: 'PUT',
             body: JSON.stringify({ owner }),
+        });
+    }
+
+    // Trips
+    async getTrips(): Promise<Trip[]> {
+        return this.makeRequest<Trip[]>('/trip');
+    }
+
+    /** Creates the trip, or updates it when it already has an id. */
+    async saveTrip(trip: Trip): Promise<Trip> {
+        log.info('Saving trip:', trip);
+        return this.makeRequest<Trip>(trip.tripId === undefined ? '/trip' : `/trip/${trip.tripId}`, {
+            method: trip.tripId === undefined ? 'POST' : 'PUT',
+            body: JSON.stringify(trip),
+        });
+    }
+
+    /** Its transactions are untagged, not deleted. */
+    async deleteTrip(tripId: number): Promise<void> {
+        log.info(`Deleting trip ${tripId}`);
+        return this.makeRequest<void>(`/trip/${tripId}`, { method: 'DELETE' });
+    }
+
+    async getTripTransactions(tripId: number): Promise<TransactionDto[]> {
+        return this.makeRequest<TransactionDto[]>(`/trip/${tripId}/transactions`);
+    }
+
+    /** Untagged transactions dated within the trip; suggestions only. */
+    async getTripCandidates(tripId: number): Promise<TransactionDto[]> {
+        return this.makeRequest<TransactionDto[]>(`/trip/${tripId}/candidates`);
+    }
+
+    /** Transactions not on this trip (including ones on other trips), matching the text and date range; at most 200. */
+    async searchTripTransactions(tripId: number, query: string, start?: string, end?: string): Promise<TransactionDto[]> {
+        const params = new URLSearchParams();
+        if (query.trim()) params.set('query', query.trim());
+        if (start) params.set('start', start);
+        if (end) params.set('end', end);
+        return this.makeRequest<TransactionDto[]>(`/trip/${tripId}/search?${params}`);
+    }
+
+    async getTripSummary(tripId: number): Promise<TripSummary> {
+        return this.makeRequest<TripSummary>(`/trip/${tripId}/summary`);
+    }
+
+    /** Tags the transactions with the trip; any already in another trip move. */
+    async assignTransactionsToTrip(tripId: number, transactionIds: number[]): Promise<TransactionDto[]> {
+        log.info(`Assigning ${transactionIds.length} transactions to trip ${tripId}`);
+        return this.makeRequest<TransactionDto[]>(`/trip/${tripId}/transactions`, {
+            method: 'PUT',
+            body: JSON.stringify({ transactionIds }),
+        });
+    }
+
+    /** Tags one transaction with a trip, or clears its tag when tripId is null. */
+    async setTransactionTrip(transactionId: number, tripId: number | null): Promise<TransactionDto> {
+        log.info(`Setting transaction ${transactionId} trip=${tripId}`);
+        return this.makeRequest<TransactionDto>(`/transaction/${transactionId}/trip`, {
+            method: 'PUT',
+            body: JSON.stringify({ tripId }),
         });
     }
 

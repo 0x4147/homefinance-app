@@ -11,9 +11,11 @@ import ca.homefinance.repository.AccountRepository;
 import ca.homefinance.repository.CategoryRepository;
 import ca.homefinance.repository.PersonRepository;
 import ca.homefinance.repository.TransactionRepository;
+import ca.homefinance.repository.TripRepository;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
@@ -47,6 +49,7 @@ public class TransactionService {
     private final PersonRepository personRepository;
     private final AccountRepository accountRepository;
     private final CategoryRepository categoryRepository;
+    private final TripRepository tripRepository;
     private final TransactionCategorizationService transactionCategorizationService;
 
     public List<Transaction> getAllTransactions() {
@@ -293,8 +296,45 @@ public class TransactionService {
                 tx.getPerson() != null ? tx.getPerson().getName() : "",
                 tx.isShared(),
                 tx.countsInBalance(),
-                tx.getOwner() != null ? tx.getOwner().getCode() : null
+                tx.getOwner() != null ? tx.getOwner().getCode() : null,
+                tx.getTrip() != null ? tx.getTrip().getTripId() : null,
+                tx.getTrip() != null ? tx.getTrip().getName() : null
         );
+    }
+
+    /** Tags a transaction with a trip, or clears the tag when tripId is null. A transaction in another trip moves. */
+    public TransactionDto setTrip(Integer transactionId, Integer tripId) {
+        Transaction transaction = transactionRepository.findById(transactionId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Transaction not found: " + transactionId));
+        transaction.setTrip(tripId == null ? null : tripRepository.findById(tripId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Trip not found: " + tripId)));
+        return toDto(transactionRepository.save(transaction));
+    }
+
+    public List<TransactionDto> getTransactionDtosByTrip(Integer tripId) {
+        return transactionRepository.findByTrip_TripId(tripId).stream().map(this::toDto).toList();
+    }
+
+    private static final int TRIP_SEARCH_LIMIT = 200;
+
+    /**
+     * Transactions that could be added to a trip but are not on it yet, matching the text in merchant or details
+     * within an optional date range, newest first, at most {@value #TRIP_SEARCH_LIMIT}. Ones already on another
+     * trip are included (adding them moves them).
+     */
+    public List<TransactionDto> searchForTrip(Integer tripId, String query, LocalDate start, LocalDate end) {
+        return transactionRepository.searchOutsideTrip(tripId,
+                        query == null ? "" : query.trim(),
+                        start != null ? start : LocalDate.of(1900, 1, 1),
+                        end != null ? end : LocalDate.of(2999, 12, 31),
+                        PageRequest.of(0, TRIP_SEARCH_LIMIT)).stream()
+                .map(this::toDto)
+                .toList();
+    }
+
+    /** Untagged transactions dated within [start, end]; the ones worth suggesting for a trip covering those dates. */
+    public List<TransactionDto> getTripCandidates(LocalDate start, LocalDate end) {
+        return transactionRepository.findByTripIsNullAndDateBetween(start, end).stream().map(this::toDto).toList();
     }
 
     /** Includes or excludes one transaction from the shared balance; whether it then counts still depends on its category. */

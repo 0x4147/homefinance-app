@@ -62,6 +62,15 @@ public class TransactionController {
 
     public record OwnerRequest(String owner) {}
 
+    /** Body {"tripId": 3} tags the transaction with that trip; {"tripId": null} clears the tag. */
+    @PutMapping("/{transactionId}/trip")
+    public ResponseEntity<TransactionDto> setTrip(@PathVariable Integer transactionId,
+                                                  @RequestBody TripRequest request) {
+        return ResponseEntity.ok(transactionService.setTrip(transactionId, request.tripId()));
+    }
+
+    public record TripRequest(Integer tripId) {}
+
     @GetMapping("/getMonthlyBalance")
     public ResponseEntity<MonthlyBalanceResponseDto> getMonthlyBalance(@RequestParam String month, @RequestParam String year) {
         try {

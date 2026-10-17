@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ArrowDown, ArrowUp, ArrowUpDown, Search, X } from 'lucide-react';
+import { apiService } from '../services/api';
 import type { Transaction, TransactionDto } from '../services/api';
+import { TripPicker } from './TripPicker';
+import { useTrips } from './useTrips';
 import { CategoryCell, CorrectionToast } from './CategoryCell';
 import { useCategoryCorrection } from './useCategoryCorrection';
 import { BalanceToggle, BalanceToast } from './BalanceToggle';
@@ -20,6 +23,7 @@ interface Row {
     category: string;
     shared: boolean;
     owner?: string | null;
+    tripId?: number | null;
 }
 
 const currency = new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD' });
@@ -49,6 +53,8 @@ function toRow(t: TransactionDto | Transaction, idx: number): Row {
         category: typeof tx.category === 'string' ? tx.category : (tx.category?.name || ''),
         shared: tx.shared ?? true,
         owner: tx.owner,
+        // Entity-shaped rows (dashboard summaries) carry a nested trip object instead of tripId
+        tripId: tx.tripId ?? (t as { trip?: { tripId?: number } | null }).trip?.tripId,
     };
 }
 
@@ -69,9 +75,25 @@ export function TransactionsModal({
     const [search, setSearch] = useState('');
     const correction = useCategoryCorrection(onCategoryChanged);
     const balance = useBalanceToggle();
+    const { trips } = useTrips();
+    const [selected, setSelected] = useState<Set<number>>(new Set());
+    const [bulkTrip, setBulkTrip] = useState('');
+    const [bulkBusy, setBulkBusy] = useState(false);
+    const [bulkError, setBulkError] = useState(false);
+    // Trip changes made in this modal, by transaction id: the transactions prop is a snapshot that is not always refreshed
+    const [tripOverrides, setTripOverrides] = useState<Record<number, number | null>>({});
 
-    // Fresh search each time the modal is opened with new content
-    useEffect(() => { if (open) setSearch(''); }, [open, transactions]);
+    // Fresh search and selection each time the modal is opened with new content
+    useEffect(() => {
+        if (open) {
+            setSearch('');
+            setSelected(new Set());
+            setBulkError(false);
+            setTripOverrides({});
+        }
+    }, [open, transactions]);
+
+    const tripOf = (r: Row) => (r.id !== undefined && r.id in tripOverrides ? tripOverrides[r.id] : r.tripId);
 
     // Escape closes; lock background scroll while open
     useEffect(() => {
@@ -111,6 +133,33 @@ export function TransactionsModal({
         }
         return { out, incoming };
     }, [visibleRows]);
+
+    const selectableIds = visibleRows.flatMap(r => (r.id === undefined ? [] : [r.id]));
+    const allSelected = selectableIds.length > 0 && selectableIds.every(id => selected.has(id));
+
+    const toggleSelected = (id: number) =>
+        setSelected(prev => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id); else next.add(id);
+            return next;
+        });
+
+    const assignSelected = async () => {
+        if (!bulkTrip || selected.size === 0) return;
+        setBulkBusy(true);
+        setBulkError(false);
+        try {
+            await apiService.assignTransactionsToTrip(Number(bulkTrip), [...selected]);
+            setTripOverrides(prev => ({ ...prev, ...Object.fromEntries([...selected].map(id => [id, Number(bulkTrip)])) }));
+            setSelected(new Set());
+            onCategoryChanged?.();
+        } catch (e) {
+            console.error('Error assigning transactions to trip:', e);
+            setBulkError(true);
+        } finally {
+            setBulkBusy(false);
+        }
+    };
 
     const handleSort = (key: SortKey) =>
         setSortConfig(prev => (prev.key === key
@@ -173,6 +222,30 @@ export function TransactionsModal({
                     </div>
                 )}
 
+                {trips.length > 0 && selected.size > 0 && (
+                    <div className="flex flex-wrap items-center gap-3 border-t border-gray-100 bg-sky-50 px-6 py-2.5 text-sm">
+                        <span className="font-medium text-sky-900">{selected.size} selected</span>
+                        <select
+                            value={bulkTrip}
+                            onChange={e => setBulkTrip(e.target.value)}
+                            aria-label="Trip to assign the selected transactions to"
+                            className="rounded-lg border border-sky-200 bg-white px-2 py-1 text-sm"
+                        >
+                            <option value="">Choose a trip…</option>
+                            {trips.map(t => <option key={t.tripId} value={t.tripId}>{t.name}</option>)}
+                        </select>
+                        <button
+                            onClick={assignSelected}
+                            disabled={!bulkTrip || bulkBusy}
+                            className="rounded-lg bg-sky-600 px-3 py-1 font-medium text-white hover:bg-sky-700 disabled:opacity-50"
+                        >
+                            Assign to trip
+                        </button>
+                        <button onClick={() => setSelected(new Set())} className="text-sky-800 hover:underline">Clear</button>
+                        {bulkError && <span role="alert" className="text-red-700">Could not assign. Please try again.</span>}
+                    </div>
+                )}
+
                 {/* Table */}
                 <div className="min-h-0 flex-1 overflow-auto border-t border-gray-100">
                     {rows.length === 0 ? (
@@ -183,6 +256,17 @@ export function TransactionsModal({
                         <table className="min-w-full text-sm">
                             <thead className="sticky top-0 z-10 bg-white/95 backdrop-blur">
                                 <tr className="border-b border-gray-200">
+                                    {trips.length > 0 && (
+                                        <th scope="col" className="w-10 py-3 pl-6">
+                                            <input
+                                                type="checkbox"
+                                                aria-label="Select all visible transactions"
+                                                checked={allSelected}
+                                                onChange={() => setSelected(allSelected ? new Set() : new Set(selectableIds))}
+                                                className="h-4 w-4 rounded border-gray-300"
+                                            />
+                                        </th>
+                                    )}
                                     {COLUMNS.map(col => {
                                         const active = sortConfig.key === col.key;
                                         const Icon = !active ? ArrowUpDown : sortConfig.direction === 'asc' ? ArrowUp : ArrowDown;
@@ -205,11 +289,27 @@ export function TransactionsModal({
                                         );
                                     })}
                                     <th scope="col" className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Balance</th>
+                                    {trips.length > 0 && (
+                                        <th scope="col" className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Trip</th>
+                                    )}
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100">
                                 {visibleRows.map(r => (
                                     <tr key={r.key} className="transition-colors hover:bg-gray-50">
+                                        {trips.length > 0 && (
+                                            <td className="w-10 py-3 pl-6">
+                                                {r.id !== undefined && (
+                                                    <input
+                                                        type="checkbox"
+                                                        aria-label={`Select ${r.entity}`}
+                                                        checked={selected.has(r.id)}
+                                                        onChange={() => toggleSelected(r.id!)}
+                                                        className="h-4 w-4 rounded border-gray-300"
+                                                    />
+                                                )}
+                                            </td>
+                                        )}
                                         <td className="whitespace-nowrap px-6 py-3 text-gray-500">{formatDate(r.date)}</td>
                                         <td className="max-w-[16rem] truncate px-6 py-3 font-medium text-gray-900" title={r.entity}>{r.entity}</td>
                                         <td className="whitespace-nowrap px-6 py-3">
@@ -241,6 +341,20 @@ export function TransactionsModal({
                                         <td className={`whitespace-nowrap px-6 py-3 text-right font-semibold tabular-nums ${r.amount >= 0 ? 'text-emerald-600' : 'text-gray-900'}`}>
                                             {r.amount >= 0 ? '+' : '−'}{currency.format(Math.abs(r.amount))}
                                         </td>
+                                        {trips.length > 0 && (
+                                            <td className="whitespace-nowrap px-6 py-3">
+                                                <TripPicker
+                                                    key={`${r.key}-${tripOf(r) ?? 'none'}`}
+                                                    transactionId={r.id}
+                                                    tripId={tripOf(r)}
+                                                    trips={trips}
+                                                    onChanged={id => {
+                                                        if (r.id !== undefined) setTripOverrides(prev => ({ ...prev, [r.id!]: id }));
+                                                        onCategoryChanged?.();
+                                                    }}
+                                                />
+                                            </td>
+                                        )}
                                     </tr>
                                 ))}
                             </tbody>

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { LayoutDashboard, PlusSquare, FilePlus, List, BarChart2, Calendar, Receipt, Brain, Tag } from 'lucide-react';
+import { LayoutDashboard, PlusSquare, FilePlus, List, BarChart2, Calendar, Receipt, Brain, Tag, Plane } from 'lucide-react';
 import { DonutChartCard } from './components/Charts';
 import { TrendChartCard } from './components/TrendChart';
 import type { TrendPoint } from './components/TrendChart';
@@ -21,6 +21,7 @@ import { useBalanceToggle } from './components/useBalanceToggle';
 import { OwnerSelect } from './components/OwnerSelect';
 import { LargestTransactionsCard, RecurringChargesCard } from './components/SpendingBehaviourCards';
 import { TransactionsModal } from './components/TransactionsModal';
+import TripsView from './components/TripsView';
 
 // --- Type Definitions for TypeScript ---
 // This defines the possible views our application can have.
@@ -32,7 +33,8 @@ type View =
   | 'SpendingInsights'
   | 'MonthlyBalanceChecker'
   | 'AddReceipt'
-  | 'CategorizationReview';
+  | 'CategorizationReview'
+  | 'Trips';
 
 // --- Dashboard Component ---
 const Dashboard = () => {
@@ -779,6 +781,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeView, setActiveView }) => {
         { id: 5, name: 'MonthlyBalanceChecker', icon: Calendar },
         { id: 6, name: 'AddReceipt', icon: Receipt },
         { id: 7, name: 'CategorizationReview', icon: Tag },
+        { id: 9, name: 'Trips', icon: Plane },
     ];
 
     // Function to format the view name for display
@@ -841,6 +844,8 @@ const App: React.FC = () => {
                 return <AddReceipt />;
             case 'CategorizationReview':
                 return <CategorizationReviewView />;
+            case 'Trips':
+                return <TripsView />;
             default:
                 return <Dashboard />;
         }

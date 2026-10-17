@@ -64,6 +64,11 @@ public class Transaction {
     @JoinColumn(name = "owner_person_id", referencedColumnName = "person_id")
     private Person owner;
 
+    /** The trip this transaction is tagged with, if any; a reporting label only, it never affects the balance. */
+    @ManyToOne
+    @JoinColumn(name = "trip_id", referencedColumnName = "trip_id")
+    private Trip trip;
+
     /** Display label derived from the category's kind and the sign of the amount; never stored. */
     public enum TransactionType {
         EXPENSE, REFUND, INCOME, TRANSFER
