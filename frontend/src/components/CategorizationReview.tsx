@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { CheckCircle, AlertCircle, DollarSign, Building, RefreshCw, Sparkles, Calendar, Loader2, Search } from 'lucide-react';
+import { CheckCircle, AlertCircle, DollarSign, Building, RefreshCw, Sparkles, Calendar, Loader2, Search, Check, Minus } from 'lucide-react';
 import { apiService, type Category, type ReviewDirection, type ReviewGroup } from '../services/api';
 import { ToastStack, type ToastMessage } from './Toast';
 import ConfirmDialog from './ConfirmDialog';
@@ -21,19 +21,34 @@ const CategorizationReview: React.FC = () => {
         [categories]);
 
     const [categorySearch, setCategorySearch] = useState('');
+    // Every merchant starts out counted toward the balance and split between both people.
+    const [counted, setCounted] = useState(true);
+    const [owner, setOwner] = useState('');
 
     const matchingCategories = useMemo(() => {
         const needle = categorySearch.trim().toLowerCase();
         return sortedCategories.filter((c) => c.name.toLowerCase().includes(needle));
     }, [sortedCategories, categorySearch]);
 
+    const [sortBy, setSortBy] = useState<'date' | 'amount'>('date');
+
     const visibleGroups = useMemo(() => {
         const needle = search.trim().toLowerCase();
-        if (!needle) return groups;
-        return groups.filter((group) =>
-            group.merchant.toLowerCase().includes(needle)
-            || group.suggestions.some((s) => s.toLowerCase().includes(needle)));
-    }, [groups, search]);
+        const filtered = needle
+            ? groups.filter((group) =>
+                group.merchant.toLowerCase().includes(needle)
+                || group.suggestions.some((s) => s.toLowerCase().includes(needle)))
+            : groups;
+        const byAmount = (a: ReviewGroup, b: ReviewGroup) => Math.abs(b.total) - Math.abs(a.total);
+        // Dates are yyyy-MM-dd, so string comparison is chronological; undated groups go last.
+        const byDate = (a: ReviewGroup, b: ReviewGroup) => {
+            if (a.lastDate === b.lastDate) return byAmount(a, b);
+            if (!a.lastDate) return 1;
+            if (!b.lastDate) return -1;
+            return b.lastDate.localeCompare(a.lastDate);
+        };
+        return [...filtered].sort(sortBy === 'date' ? byDate : byAmount);
+    }, [groups, search, sortBy]);
 
     const dismissToast = useCallback((id: number) => {
         setToasts((prev) => prev.filter((t) => t.id !== id));
@@ -68,6 +83,8 @@ const CategorizationReview: React.FC = () => {
         setSelectedGroup(null);
         setSelectedCategory('');
         setCategorySearch('');
+        setCounted(true);
+        setOwner('');
     };
 
     // Saving a rule can clear other groups too (name variants of the same merchant), so reload.
@@ -79,7 +96,7 @@ const CategorizationReview: React.FC = () => {
 
         try {
             setIsProcessing(true);
-            const { resolved } = await apiService.reviewGroup(selectedGroup.key, selectedCategory);
+            const { resolved } = await apiService.reviewGroup(selectedGroup.key, selectedCategory, { shared: counted, owner });
             clearSelection();
             await loadData();
             notify('success', `Categorized ${resolved} transaction${resolved === 1 ? '' : 's'} as ${selectedCategory}`);
@@ -282,7 +299,18 @@ const CategorizationReview: React.FC = () => {
                                 <h3 className="text-lg font-semibold text-gray-900">
                                     Uncategorized Merchants
                                 </h3>
-                                <p className="text-sm text-gray-500">Largest spend first</p>
+                                <div className="mt-1 flex items-center gap-2 text-sm text-gray-500">
+                                    <label htmlFor="review-sort">Sort by</label>
+                                    <select
+                                        id="review-sort"
+                                        value={sortBy}
+                                        onChange={(e) => setSortBy(e.target.value as 'date' | 'amount')}
+                                        className="rounded-lg border border-gray-200 bg-gray-50 py-1 pl-2 pr-6 text-sm text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                                    >
+                                        <option value="date">Date (most recent first)</option>
+                                        <option value="amount">Amount (largest first)</option>
+                                    </select>
+                                </div>
                                 {groups.some((group) => group.aiSuggestion) && (
                                     <div className="mt-2 flex items-center gap-3">
                                         <button
@@ -322,6 +350,8 @@ const CategorizationReview: React.FC = () => {
                                             setSelectedGroup(group);
                                             setSelectedCategory(group.suggestions[0] ?? '');
                                             setCategorySearch('');
+                                            setCounted(true);
+                                            setOwner('');
                                         }}
                                         className={`p-4 cursor-pointer transition-colors duration-200 hover:bg-gray-50 ${
                                             selectedGroup?.key === group.key ? 'bg-blue-50 border-r-4 border-blue-500' : ''
@@ -497,6 +527,47 @@ const CategorizationReview: React.FC = () => {
                                                 </li>
                                             ))}
                                         </ul>
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                                            Balance
+                                        </label>
+                                        <div className="flex flex-wrap items-center gap-3">
+                                            <button
+                                                type="button"
+                                                role="switch"
+                                                aria-checked={counted}
+                                                onClick={() => setCounted(!counted)}
+                                                title={counted ? 'Counts toward the balance. Click to leave it out.' : 'Left out of the balance. Click to include it.'}
+                                                className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+                                                    counted
+                                                        ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+                                                        : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                                                }`}
+                                            >
+                                                {counted ? <Check className="h-3 w-3" aria-hidden="true" /> : <Minus className="h-3 w-3" aria-hidden="true" />}
+                                                {counted ? 'Counted' : 'Excluded'}
+                                            </button>
+                                            <select
+                                                value={owner}
+                                                onChange={(e) => setOwner(e.target.value)}
+                                                aria-label="Who owes these transactions"
+                                                title="Split between both, or owed entirely by one person"
+                                                className={`rounded-full border-0 px-2 py-0.5 text-xs font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+                                                    owner ? 'bg-amber-50 text-amber-800' : 'bg-gray-100 text-gray-500'
+                                                }`}
+                                            >
+                                                <option value="">Split</option>
+                                                <option value="ASANKA">Asanka only</option>
+                                                <option value="DIVYA">Divya only</option>
+                                            </select>
+                                        </div>
+                                        {selectedCategory && categories.some((c) => c.name === selectedCategory && !c.inBalance) && (
+                                            <p className="mt-2 text-xs text-gray-500">
+                                                “{selectedCategory}” doesn't count toward the balance, whatever is chosen here.
+                                            </p>
+                                        )}
                                     </div>
 
                                     <div className="space-y-2">

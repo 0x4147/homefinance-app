@@ -23,6 +23,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.*;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 import static ca.homefinance.helper.TransactionCategorizationHelper.*;
@@ -105,6 +106,15 @@ public class TransactionCategorizationService {
      */
     @Transactional
     public int learnFromUserCorrection(String merchant, String correctCategory) {
+        return learnFromUserCorrection(merchant, correctCategory, linked -> { });
+    }
+
+    /**
+     * Same as {@link #learnFromUserCorrection(String, String)}, and also lets the caller adjust each
+     * transaction that gets categorized (e.g. whether it counts in the balance, who owes it).
+     */
+    @Transactional
+    public int learnFromUserCorrection(String merchant, String correctCategory, Consumer<Transaction> onCategorized) {
         String key = brandKey(merchant);
         if (key.isBlank()) {
             throw new IllegalArgumentException("Cannot learn from blank merchant: " + merchant);
@@ -118,7 +128,7 @@ public class TransactionCategorizationService {
         merchantRuleRepository.save(rule);
         cachedRules = null;
 
-        int resolved = applyToPendingReviews(key, category);
+        int resolved = applyToPendingReviews(key, category, onCategorized);
         log.info("Learned rule: {} -> {} ({} pending resolved)", key, category.getName(), resolved);
         return resolved;
     }
@@ -229,7 +239,7 @@ public class TransactionCategorizationService {
         for (UncategorizedTransaction pending : uncategorizedTransactionRepository.findByReviewedFalseOrderByCreatedAtDesc()) {
             MerchantRule rule = findBestRule(searchKey(pending.getMerchant(), pending.getDetails()), rules);
             if (rule != null) {
-                resolve(pending, rule.getCategory(), LocalDateTime.now());
+                resolve(pending, rule.getCategory(), LocalDateTime.now(), linked -> { });
                 resolved++;
             }
         }
@@ -237,7 +247,8 @@ public class TransactionCategorizationService {
     }
 
     /**
-     * Pending reviews grouped by merchant, largest spend first, so each decision clears as many as possible.
+     * Pending reviews grouped by merchant, ordered by each group's latest transaction date (most recent first;
+     * undated groups last, ties broken by largest spend).
      */
     public List<ReviewGroup> getReviewGroups() {
         Map<String, List<UncategorizedTransaction>> byKey = new LinkedHashMap<>();
@@ -292,7 +303,8 @@ public class TransactionCategorizationService {
                             items.stream().map(item -> accountByPending.get(item.getId()))
                                     .filter(Objects::nonNull).distinct().sorted().toList());
                 })
-                .sorted(Comparator.comparing((ReviewGroup group) -> group.total().abs()).reversed())
+                .sorted(Comparator.comparing(ReviewGroup::lastDate, Comparator.nullsLast(Comparator.reverseOrder()))
+                        .thenComparing(group -> group.total().abs(), Comparator.reverseOrder()))
                 .toList();
     }
 
@@ -352,20 +364,21 @@ public class TransactionCategorizationService {
                 .toList();
     }
 
-    private int applyToPendingReviews(String key, Category category) {
+    private int applyToPendingReviews(String key, Category category, Consumer<Transaction> onCategorized) {
         LocalDateTime now = LocalDateTime.now();
         int resolved = 0;
         for (UncategorizedTransaction pending : uncategorizedTransactionRepository.findByReviewedFalseOrderByCreatedAtDesc()) {
             if (matchSpecificity(searchKey(pending.getMerchant(), pending.getDetails()), key) == 0) {
                 continue;
             }
-            resolve(pending, category, now);
+            resolve(pending, category, now, onCategorized);
             resolved++;
         }
         return resolved;
     }
 
-    private void resolve(UncategorizedTransaction pending, Category category, LocalDateTime when) {
+    private void resolve(UncategorizedTransaction pending, Category category, LocalDateTime when,
+                         Consumer<Transaction> onCategorized) {
         pending.setReviewed(true);
         pending.setAssignedCategory(category.getName());
         pending.setReviewedAt(when);
@@ -373,6 +386,7 @@ public class TransactionCategorizationService {
 
         for (Transaction linked : transactionRepository.findByUncategorizedTransaction_Id(pending.getId())) {
             linked.setCategory(category);
+            onCategorized.accept(linked);
             transactionRepository.save(linked);
         }
     }

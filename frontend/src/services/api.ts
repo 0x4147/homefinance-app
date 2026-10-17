@@ -422,9 +422,21 @@ class ApiService {
         return this.makeRequest<ReviewGroup[]>('/categorization/uncategorized/groups');
     }
 
-    async reviewGroup(merchantKey: string, assignedCategory: string): Promise<{ resolved: number }> {
+    /**
+     * Categorizes every pending transaction of a merchant. When `options` is given, `shared` (counts toward the
+     * balance) and `owner` (ASANKA / DIVYA, or '' to split between both) are applied to each of them too.
+     */
+    async reviewGroup(
+        merchantKey: string,
+        assignedCategory: string,
+        options?: { shared: boolean; owner: string },
+    ): Promise<{ resolved: number }> {
         log.info(`Categorizing merchant group ${merchantKey} as ${assignedCategory}`);
         const params = new URLSearchParams({ merchantKey, assignedCategory });
+        if (options) {
+            params.set('shared', String(options.shared));
+            params.set('owner', options.owner);
+        }
         return this.makeRequest<{ resolved: number }>('/categorization/review/group', {
             method: 'POST',
             body: params.toString(),

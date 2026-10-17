@@ -4,9 +4,11 @@ import ca.homefinance.dto.CategoryCorrection;
 import ca.homefinance.dto.CorrectCategoryRequest;
 import ca.homefinance.dto.ReviewGroup;
 import ca.homefinance.entity.Category;
+import ca.homefinance.entity.Person;
 import ca.homefinance.entity.Transaction;
 import ca.homefinance.entity.UncategorizedTransaction;
 import ca.homefinance.repository.CategoryRepository;
+import ca.homefinance.repository.PersonRepository;
 import ca.homefinance.repository.TransactionRepository;
 import ca.homefinance.repository.UncategorizedTransactionRepository;
 import ca.homefinance.service.AiCategorySuggestionService;
@@ -16,6 +18,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 import java.util.Map;
@@ -39,6 +42,9 @@ public class CategorizationController {
 
     @Autowired
     private final AiCategorySuggestionService aiCategorySuggestionService;
+
+    @Autowired
+    private final PersonRepository personRepository;
 
     /**
      * Get suggested categories for a merchant
@@ -212,14 +218,29 @@ public class CategorizationController {
     }
 
     /**
-     * Categorize a whole merchant group at once and learn the rule
+     * Categorize a whole merchant group at once and learn the rule.
+     * {@code shared} and {@code owner} are optional; when given they are applied to every transaction
+     * categorized (a blank {@code owner} splits it between both people), otherwise they are left as they are.
      */
     @PostMapping("/review/group")
     public ResponseEntity<Map<String, Object>> reviewGroup(
             @RequestParam String merchantKey,
-            @RequestParam String assignedCategory) {
+            @RequestParam String assignedCategory,
+            @RequestParam(required = false) Boolean shared,
+            @RequestParam(required = false) String owner) {
 
-        int resolved = categorizationService.learnFromUserCorrection(merchantKey, assignedCategory);
+        Person ownerPerson = null;
+        if (owner != null && !owner.isBlank()) {
+            ownerPerson = personRepository.findByCode(owner.toUpperCase())
+                    .filter(p -> p.getCode().equals("ASANKA") || p.getCode().equals("DIVYA"))
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid owner: " + owner));
+        }
+        final Person resolvedOwner = ownerPerson;
+
+        int resolved = categorizationService.learnFromUserCorrection(merchantKey, assignedCategory, transaction -> {
+            if (shared != null) transaction.setShared(shared);
+            if (owner != null) transaction.setOwner(resolvedOwner);
+        });
         return ResponseEntity.ok(Map.of("resolved", resolved));
     }
 
