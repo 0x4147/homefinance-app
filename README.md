@@ -71,8 +71,8 @@ docker-compose down
 ```
 
 **Stop and remove volumes**:
-```bash
-docker-compose down -v
+//Removed for safety
+
 ```
 
 ## Development
