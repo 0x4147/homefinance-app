@@ -13,7 +13,8 @@ RUN mvn -B clean package -DskipTests
 FROM eclipse-temurin:17-jre-alpine
 WORKDIR /app
 
-RUN addgroup -S app && adduser -S app -G app
+# Pick up Alpine security fixes published after the base image was built
+RUN apk upgrade --no-cache && addgroup -S app && adduser -S app -G app
 
 COPY --from=build /build/target/homefinance-backend-*.jar homefinance-backend.jar
 
