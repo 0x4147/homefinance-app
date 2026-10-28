@@ -62,7 +62,7 @@ Add one to `backend/` (`target/`, `.idea/`, `*.log`) and `frontend/` (`node_modu
 - Pre-existing failures fixed in this PR so CI starts green: a stale `TransactionControllerTest` mock and four `no-explicit-any` lint errors.
 - Both runtime images run `apk upgrade` to pick up Alpine fixes the upstream base images lag on.
 - `application.properties` root/Hibernate logging lowered from DEBUG to INFO: per-row Hibernate DEBUG output stalled the containerised backend.
-- **Trivy, backend is report-only.** Spring Boot 3.3.3 carries 40 fixable HIGH/CRITICAL CVEs (Tomcat, Spring, Jackson) that need roughly Spring Boot 3.5.x. The frontend scan is a hard gate. Follow-up: upgrade Spring Boot on its own branch, then flip the backend `exit-code` to `1`.
+- **Trivy gates both images.** The backend was report-only while Spring Boot 3.3.3 carried 40 fixable HIGH/CRITICAL CVEs. After the Boot 3.5.16 upgrade (plus Jackson and Tomcat version overrides in the pom) two spring-webmvc CVEs remain with no fix inside Spring 6.2; they are not applicable to this app and are accepted in `.trivyignore` with a justification and an expiry date. Both scans are blocking.
 
 ## Risks / notes
 - The Trivy gate may fail on base-image CVEs that are out of our control; `ignore-unfixed: true` limits this, and a `.trivyignore` is the escape hatch if needed.

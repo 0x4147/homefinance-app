@@ -1,0 +1,9 @@
+# Accepted Trivy findings. Each entry needs a justification and an expiry so it gets re-reviewed.
+
+# spring-webmvc 6.2.19: RCE via XsltView with a "/**" view mapping. Fixed only in Spring Framework 7.0.9
+# (no 6.2.x fix yet). Not applicable: this is a JSON REST API with no view rendering or XSLT.
+CVE-2026-47884 exp:2027-01-31
+
+# spring-webmvc 6.2.19: stream corruption with Server-Sent Events + view fragments. Fixed only in 7.0.9.
+# Not applicable: the app uses neither SSE nor templated views.
+CVE-2026-47890 exp:2027-01-31
