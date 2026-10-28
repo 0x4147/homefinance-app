@@ -451,7 +451,7 @@ const SpendingInsights = () => {
     const [preset, setPreset] = useState<RangePreset>('ytd');
     const [range, setRange] = useState<DateRange>(() => rangeForPreset('ytd'));
     const [error, setError] = useState<string>('');
-    const [chartData, setChartData] = useState<any>(null);
+    const [chartData, setChartData] = useState<{ labels: string[]; values: number[] } | null>(null);
     const [detailsMap, setDetailsMap] = useState<Record<string, (TransactionDto | Transaction)[]> | null>(null);
     const [originalKeys, setOriginalKeys] = useState<string[] | null>(null);
     const [modalOpen, setModalOpen] = useState(false);
@@ -649,7 +649,7 @@ const SpendingInsights = () => {
                 return renderRangeCard('Top Merchants', (_label, index) => {
                     const key = originalKeys?.[index] || '';
                     const txs = (key && detailsMap) ? (detailsMap[key] || []) : [];
-                    setModalTitle(`Transactions in ${chartData.labels[index]}`);
+                    setModalTitle(`Transactions in ${chartData?.labels[index]}`);
                     setModalTransactions(txs);
                     setModalOpen(true);
                 });
@@ -658,7 +658,7 @@ const SpendingInsights = () => {
                 return renderRangeCard('Spending by Month', (_label, index) => {
                     const key = originalKeys?.[index] || '';
                     const txs = (key && detailsMap) ? (detailsMap[key] || []) : [];
-                    setModalTitle(`Transactions in ${chartData.labels[index]}`);
+                    setModalTitle(`Transactions in ${chartData?.labels[index]}`);
                     setModalTransactions(txs);
                     setModalOpen(true);
                 });

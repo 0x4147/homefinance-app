@@ -39,6 +39,8 @@ services:
       - SPRING_DATASOURCE_USERNAME=admin
       - SPRING_DATASOURCE_PASSWORD=password
       - SPRING_PROFILES_ACTIVE=dev
+      # Local debugging only; the image itself no longer opens a debug port
+      - JAVA_TOOL_OPTIONS=-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005
     networks:
       - homefinance-network
     restart: unless-stopped

@@ -3,13 +3,13 @@ const API_BASE_URL = 'http://localhost:8585/api/v1';
 
 // Console logging utility
 const log = {
-    info: (message: string, data?: any) => {
+    info: (message: string, data?: unknown) => {
         console.log(`[API] ${message}`, data || '');
     },
-    error: (message: string, error?: any) => {
+    error: (message: string, error?: unknown) => {
         console.error(`[API ERROR] ${message}`, error || '');
     },
-    debug: (message: string, data?: any) => {
+    debug: (message: string, data?: unknown) => {
         console.debug(`[API DEBUG] ${message}`, data || '');
     }
 };

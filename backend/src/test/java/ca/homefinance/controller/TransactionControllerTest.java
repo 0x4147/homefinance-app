@@ -72,7 +72,7 @@ class TransactionControllerTest {
                 "Entity", "Details", "ASANKA", "EXPENSE", "1", "1");
         Transaction saved = new Transaction();
         saved.setTransactionId(1);
-        when(transactionService.createTransaction(dto)).thenReturn(saved);
+        when(transactionService.createTransaction(dto, false)).thenReturn(saved);
 
         mockMvc.perform(post("/api/v1/transaction/saveTransaction")
                         .contentType(MediaType.APPLICATION_JSON)

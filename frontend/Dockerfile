@@ -1,5 +1,5 @@
 # Build Stage
-FROM node:18-alpine AS build
+FROM node:20-alpine AS build
 
 WORKDIR /app
 
@@ -17,6 +17,9 @@ RUN npm run build
 
 # Production Stage
 FROM nginx:alpine
+
+# Pick up Alpine security fixes published after the base image was built
+RUN apk upgrade --no-cache
 
 # Copy built assets from build stage
 COPY --from=build /app/dist /usr/share/nginx/html
