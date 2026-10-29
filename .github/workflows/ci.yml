@@ -106,6 +106,5 @@ jobs:
           image-ref: homefinance-${{ matrix.service }}:ci
           severity: HIGH,CRITICAL
           ignore-unfixed: true
-          # TODO: make the backend scan blocking once Spring Boot is upgraded (3.3.3 has
-          # fixable HIGH/CRITICAL CVEs). Until then it reports findings without failing the PR.
-          exit-code: ${{ matrix.service == 'backend' && '0' || '1' }}
+          # Accepted findings live in .trivyignore (with justification and expiry)
+          exit-code: '1'
