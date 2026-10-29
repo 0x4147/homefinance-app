@@ -74,6 +74,8 @@ Pulled from `ghcr.io/0x4147/homefinance-{backend,frontend}:<tag>`. The two GHCR 
 - RAM: 3 nodes at about 2.5 GB plus existing Docker containers; reduce node memory or count if the machine strains.
 - `minikube tunnel` needs an elevated terminal on Windows and must stay running.
 - Calico adds memory overhead and startup time; fallback is no CNI enforcement (policies become documentation only).
+- Verified in Part A: readiness returns DOWN (HTTP 503) when MySQL is unreachable while liveness stays UP, but the DB check takes about 30s because of Hikari's default connection timeout. The chart's readiness probe therefore uses a generous `timeoutSeconds` (or the app sets `spring.datasource.hikari.connection-timeout` lower) so a DB outage marks the pod NotReady promptly.
+- Existing behaviour, unchanged: Spring's default 1 MB multipart limit still caps CSV uploads (Nginx now allows 20 MB and is not the limiter).
 - Flyway runs on backend startup; with 2 prod replicas it uses its schema lock table, so concurrent start is safe.
 - The backend image still carries 40 known CVEs until the Spring Boot upgrade lands (separate branch).
 - The previous MongoDB credential must be rotated in Atlas by the owner; removing it from the file does not remove it from git history.
