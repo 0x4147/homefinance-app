@@ -1,5 +1,6 @@
 // API service for backend communication
-const API_BASE_URL = 'http://localhost:8585/api/v1';
+// Relative so the same build works behind any host: Nginx (compose/Kubernetes) and the Vite dev server both proxy /api to the backend
+const API_BASE_URL = '/api/v1';
 
 // Console logging utility
 const log = {
