@@ -80,3 +80,13 @@ Add a `bump-dev` job to `.github/workflows/publish.yml`:
 
 ## Out of scope
 Argo CD SSO/RBAC, notifications, multi-cluster, Image Updater, managing the DB Secret through Git (Sealed Secrets phase), TLS and a real ingress for the Argo UI.
+
+## Implementation notes (added while building)
+- **Chart version:** `argo/argo-cd` 10.17.2 (Argo CD v3.6.1), pinned in `cluster/argocd-up.ps1`.
+- **ApplicationSet controller:** `applicationSet.enabled` does not switch it off in this chart version (the controller still renders), so `applicationSet.replicas: 0` is used.
+- **Memory:** after a node restart Kubernetes does not rebalance running pods; the other two nodes sat at about 85% memory while `m03` was at 31%. Argo CD is pinned to `m03` with `global.nodeSelector` in the (local-only) values file.
+- **Adoption was verified before it happened:** `helm template ... | kubectl diff -f -` reported no differences for either environment, so the only `OutOfSync` cause was Argo's own tracking annotation. Prod (manual sync) was adopted first; syncing it recreated no pod. Dev was adopted afterwards with the same result and all 2,437 transactions intact. The old Helm release Secrets were then deleted.
+- **Ingress shows `Progressing`:** Argo's Ingress health check waits for a load-balancer address, which only exists while `minikube tunnel` runs. With the tunnel stopped, both Applications are `Synced` but `Progressing`, and the Ingress is the only non-healthy resource (confirmed through the Argo API's resource tree). Not a deployment problem.
+- **Self-heal confirmed:** scaling the dev frontend to 3 by hand was reverted to 1 within the same second (Deployment events and Argo's automated operation share the timestamp).
+- **Bump job skips safely** while `GITOPS_PAT` is not configured (it prints a notice instead of failing the `develop` push).
+- **Still to verify end to end** once the token exists: the bump PR opening, passing `helm` and auto-merging, and the Promote workflow.
