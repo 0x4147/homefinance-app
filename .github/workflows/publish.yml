@@ -39,3 +39,72 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha,scope=${{ matrix.service }}
           cache-to: type=gha,scope=${{ matrix.service }},mode=max
+
+  # Opens (and auto-merges) a PR in the gitops repo that points dev at the images just published.
+  # Argo CD then deploys dev from the gitops repo's main branch. Prod is promoted separately and manually.
+  bump-dev:
+    needs: publish
+    if: github.ref == 'refs/heads/develop'
+    runs-on: ubuntu-latest
+    # Serialize bumps so two quick merges don't race on the same lines
+    concurrency:
+      group: bump-dev
+      cancel-in-progress: false
+    env:
+      # A PAT (not GITHUB_TOKEN): it must write to another repo, and PRs it opens must trigger the gitops "helm" check
+      GH_TOKEN: ${{ secrets.GITOPS_PAT }}
+      GITOPS_REPO: 0x4147/homefinance-gitops
+    steps:
+      - name: Check the token is configured
+        id: gate
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::notice::GITOPS_PAT is not set, skipping the gitops bump"
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.gate.outputs.enabled == 'true'
+        with:
+          repository: ${{ env.GITOPS_REPO }}
+          token: ${{ secrets.GITOPS_PAT }}
+
+      - name: Point dev at the new images
+        if: steps.gate.outputs.enabled == 'true'
+        env:
+          TAG_SHA: ${{ github.sha }}
+        run: |
+          # Same 7-character form that docker/metadata-action (type=sha,format=short) tags the images with
+          tag="sha-${TAG_SHA::7}"
+          echo "TAG=$tag" >> "$GITHUB_ENV"
+          TAG="$tag" yq -i '.backend.image.tag = strenv(TAG) | .frontend.image.tag = strenv(TAG)' envs/dev/values.yaml
+          git diff --stat
+
+      - name: Open the PR and enable auto-merge
+        if: steps.gate.outputs.enabled == 'true'
+        env:
+          APP_SHA: ${{ github.sha }}
+          APP_REPO: ${{ github.repository }}
+        run: |
+          if git diff --quiet; then
+            echo "dev already runs $TAG, nothing to do"
+            exit 0
+          fi
+          # A newer bump supersedes any older one still open (they would conflict on the same lines)
+          for n in $(gh pr list --repo "$GITOPS_REPO" --state open --json number,headRefName \
+                       --jq '.[] | select(.headRefName | startswith("bump/dev-")) | .number'); do
+            gh pr close "$n" --repo "$GITOPS_REPO" --delete-branch --comment "Superseded by ${TAG}"
+          done
+          branch="bump/dev-${TAG}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$branch"
+          git commit -am "Deploy ${TAG} to dev"
+          git push --force-with-lease origin "$branch"
+          url=$(gh pr create --repo "$GITOPS_REPO" --base main --head "$branch" \
+            --title "Deploy ${TAG} to dev" \
+            --body "Bumps the dev backend and frontend image tags to \`${TAG}\`, published from https://github.com/${APP_REPO}/commit/${APP_SHA}")
+          echo "$url"
+          gh pr merge "$url" --auto --merge
